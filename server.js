@@ -25,6 +25,10 @@ const restaurantRoutes = require('./routes/restaurantRoutes');
 const menuRoutes = require('./routes/menuRoutes');
 const matchingRoutes = require('./routes/matchingRoutes');
 
+// Backup
+const { runBackup } = require('./utils/backup');
+setInterval(runBackup, 24 * 60 * 60 * 1000);
+
 const app = express();
 
 // ============================================================
@@ -124,7 +128,7 @@ app.listen(config.PORT, () => {
   logger.info('  GET    /api/orders/:orderId');
   logger.info('  PATCH  /api/orders/:orderId/status');
 
-  // Restaurants (Phase 4) - NEW
+  // Restaurants (Phase 4)
   logger.info('  POST   /api/restaurants/register');
   logger.info('  GET    /api/restaurants/mine');
   logger.info('  GET    /api/restaurants/nearby');
@@ -132,7 +136,7 @@ app.listen(config.PORT, () => {
   logger.info('  PATCH  /api/restaurants/:restaurantId');
   logger.info('  PATCH  /api/restaurants/:restaurantId/active-status');
 
-  // Menus (Phase 4) - NEW
+  // Menus (Phase 4)
   logger.info('  POST   /api/menus');
   logger.info('  POST   /api/menus/bulk');
   logger.info('  GET    /api/menus/restaurant/:restaurantId');
@@ -142,6 +146,6 @@ app.listen(config.PORT, () => {
   logger.info('  DELETE /api/menus/:menuItemId');
   logger.info('  POST   /api/menus/search');
 
-  // Matching (Phase 4) - NEW
+  // Matching (Phase 4)
   logger.info('  POST   /api/matching/find');
 });
