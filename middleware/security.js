@@ -7,9 +7,15 @@ const helmetMiddleware = helmet();
 
 // 2. CORS - Cross-Origin
 const corsMiddleware = cors({
-  origin: process.env.ALLOWED_ORIGINS || 'http://localhost:3000',
+  origin: [
+    'http://localhost:3000',
+    'http://localhost:5173',
+    'https://billtable-customer-web.onrender.com',
+    'https://billtable-restaurant.onrender.com',
+    'https://billtable-admin.onrender.com',
+  ],
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization']
 });
 
