@@ -1,3 +1,4 @@
+const { loginLimiter, resetLoginAttempts } = require('../middleware/loginLimit');
 /**
  * ============================================================
  * BillTable Auth Routes
@@ -79,7 +80,7 @@ router.post('/register', async (req, res) => {
  *   "password": "securePass123"
  * }
  */
-router.post('/login', async (req, res) => {
+router.post('/login', loginLimiter, async (req, res) => {
     try {
         const { email, password } = req.body;
 
