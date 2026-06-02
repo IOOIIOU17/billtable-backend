@@ -54,10 +54,17 @@ router.post('/register', async (req, res) => {
         }
 
         const user = await userService.registerUser(email, password, name);
+        const jwt = require('jsonwebtoken');
+        const accessToken = jwt.sign(
+          { userId: user.id, email: user.email, role: user.role },
+          process.env.JWT_SECRET,
+          { expiresIn: process.env.JWT_EXPIRE || '15m' }
+        );
 
         return res.status(201).json({
             status: 'OK',
             message: 'User registered successfully',
+          accessToken,
             data: user,
         });
     } catch (error) {
