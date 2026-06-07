@@ -20,7 +20,7 @@ router.post('/', authenticateToken, async (req, res) => {
   }
 });
 
-// GET /api/orders/restaurant — ดึง orders ของร้านที่ owner คนนี้เป็นเจ้าของ
+// GET /api/orders/restaurant
 router.get('/restaurant', authenticateToken, async (req, res) => {
   try {
     const ownerUserId = req.user.userId;
