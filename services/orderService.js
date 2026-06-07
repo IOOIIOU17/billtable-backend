@@ -48,8 +48,8 @@ const createOrder = async (userId, restaurantId, items) => {
 const getOrderById = async (orderId, userId) => {
   try {
     const result = await pool.query(
-      'SELECT * FROM orders WHERE id = $1 AND user_id = $2',
-      [orderId, userId]
+      'SELECT * FROM orders WHERE id = $1',
+      [orderId]
     );
     if (result.rows.length === 0) {
       throw new Error('Order not found');
