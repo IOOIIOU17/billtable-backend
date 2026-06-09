@@ -59,7 +59,7 @@ async function addMenuItem(payload) {
 
     const values = [
         restaurantId, name, description, price,
-        cuisineType, category, spicyLevel,
+        cuisineType || 'general', category, spicyLevel || 0,
         allergens || [], dietaryTags || [], servingSize || 1,
         imageUrl, displayOrder,
     ];
