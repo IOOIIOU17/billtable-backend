@@ -69,7 +69,7 @@ router.post('/restaurant-login', loginLimiter, async (req, res) => {
     if (!result.user || result.user.role !== 'restaurant') {
       return res.status(401).json({ status: 'ERROR', message: 'Not a restaurant account' });
     }
-    const db = require('../config/db');
+    const db = require('../db');
     const restResult = await db.query(
       'SELECT id FROM restaurants WHERE owner_user_id = $1 LIMIT 1',
       [result.user.id]
