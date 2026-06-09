@@ -60,7 +60,7 @@ async function addMenuItem(payload) {
     const values = [
         restaurantId, name, description, price,
         cuisineType, category, spicyLevel,
-        allergens, dietaryTags, servingSize,
+        allergens || [], dietaryTags || [], servingSize || 1,
         imageUrl, displayOrder,
     ];
 
@@ -125,7 +125,7 @@ async function bulkAddMenuItems(restaurantId, items) {
             const result = await client.query(insertQuery, [
                 restaurantId, name, description, price,
                 cuisineType, category, spicyLevel,
-                allergens, dietaryTags, servingSize,
+                allergens || [], dietaryTags || [], servingSize || 1,
                 imageUrl, displayOrder,
             ]);
             
