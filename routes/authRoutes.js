@@ -69,10 +69,24 @@ router.post('/restaurant-login', loginLimiter, async (req, res) => {
     if (!result.user || result.user.role !== 'restaurant') {
       return res.status(401).json({ status: 'ERROR', message: 'Not a restaurant account' });
     }
+    const db = require('../config/db');
+    const restResult = await db.query(
+      'SELECT id FROM restaurants WHERE owner_user_id = $1 LIMIT 1',
+      [result.user.id]
+    );
+    const restaurantId = restResult.rows[0]?.id || null;
+
+    const jwt = require('jsonwebtoken');
+    const newToken = jwt.sign(
+      { userId: result.user.id, email: result.user.email, role: result.user.role, restaurantId },
+      process.env.JWT_SECRET,
+      { expiresIn: process.env.JWT_EXPIRE || '7d' }
+    );
+
     return res.status(200).json({
       status: 'OK',
       message: 'Restaurant login successful',
-      accessToken: result.accessToken,
+      accessToken: newToken,
       data: result.user,
     });
   } catch (error) {
