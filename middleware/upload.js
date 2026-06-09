@@ -10,11 +10,9 @@ cloudinary.config({
 
 const storage = new CloudinaryStorage({
   cloudinary,
-  params: async (req, file) => {
-    return {
-      folder: 'billtable/menus',
-      allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
-    };
+  params: {
+    folder: 'billtable/menus',
+    allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
   },
 });
 
