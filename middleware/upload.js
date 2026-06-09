@@ -14,7 +14,6 @@ const storage = new CloudinaryStorage({
     return {
       folder: 'billtable/menus',
       allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
-      transformation: [{ width: 800, height: 800, crop: 'limit' }],
     };
   },
 });
