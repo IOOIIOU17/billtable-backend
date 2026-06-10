@@ -6,9 +6,7 @@ const db = require('../db');
 router.get('/all', authenticateToken, async (req, res) => {
   try {
     const result = await db.query(
-      `SELECT id, name, email, phone, role, created_at
-       FROM users
-       ORDER BY created_at DESC`
+      `SELECT id, name, email, role, created_at FROM users ORDER BY created_at DESC`
     );
     return res.status(200).json({ users: result.rows });
   } catch (error) {
