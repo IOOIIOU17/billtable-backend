@@ -12,7 +12,6 @@ const storage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: {
     folder: "billtable/menus",
-    allowed_formats: ["jpg", "jpeg", "png", "webp"],
   },
 });
 
