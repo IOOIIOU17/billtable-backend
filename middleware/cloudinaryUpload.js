@@ -1,24 +1,19 @@
-const cloudinary = require('cloudinary').v2;
+const axios = require("axios");
+const FormData = require("form-data");
 
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-});
+const uploadToCloudinary = async (buffer) => {
+  const formData = new FormData();
+  formData.append("file", buffer, { filename: "upload.jpg", contentType: "image/jpeg" });
+  formData.append("upload_preset", "billtable_menu");
 
-const uploadToCloudinary = (buffer) => {
-  return new Promise((resolve, reject) => {
-    const stream = cloudinary.uploader.upload_stream(
-      {
-        upload_preset: "billtable_menu",
-      },
-      (error, result) => {
-        if (error) return reject(error);
-        resolve(result.secure_url);
-      }
-    );
-    stream.end(buffer);
-  });
+  const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+  const response = await axios.post(
+    `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
+    formData,
+    { headers: formData.getHeaders() }
+  );
+
+  return response.data.secure_url;
 };
 
 module.exports = uploadToCloudinary;
