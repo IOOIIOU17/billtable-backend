@@ -1,4 +1,4 @@
-const cloudinary = require("cloudinary").v2;
+const cloudinary = require('cloudinary').v2;
 
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -9,7 +9,9 @@ cloudinary.config({
 const uploadToCloudinary = (buffer) => {
   return new Promise((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(
-      { folder: "billtable/menus" },
+      {
+        upload_preset: "billtable_menu",
+      },
       (error, result) => {
         if (error) return reject(error);
         resolve(result.secure_url);
