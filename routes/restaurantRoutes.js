@@ -170,6 +170,23 @@ router.patch('/:restaurantId/active-status', authenticateToken, async (req, res)
     }
 });
 
+
+router.get('/all', authenticateToken, async (req, res) => {
+  try {
+    const result = await db.query(
+      `SELECT r.*, u.email as owner_email,
+        (SELECT COUNT(*) FROM orders o WHERE o.restaurant_id = r.id) as total_orders
+       FROM restaurants r
+       LEFT JOIN users u ON r.owner_user_id = u.id
+       ORDER BY r.created_at DESC`
+    );
+    return res.status(200).json({ restaurants: result.rows });
+  } catch (error) {
+    console.error('Error fetching all restaurants:', error);
+    return res.status(500).json({ error: 'Failed to fetch restaurants' });
+  }
+});
+
 router.post('/onboarding-check', authenticateToken, async (req, res) => {
     try {
         const { restaurantId } = req.body;
