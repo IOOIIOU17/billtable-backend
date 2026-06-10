@@ -1,4 +1,5 @@
 const express = require('express');
+const uploadToCloudinary = require('../middleware/cloudinaryUpload');
 const router = express.Router();
 const menuService = require('../services/menuService');
 const restaurantService = require('../services/restaurantService');
@@ -33,7 +34,7 @@ router.post('/', authenticateToken, upload.single('image'), async (req, res) => 
 
     await verifyRestaurantOwnership(restaurantId, userId);
 
-    const imageUrl = req.file ? req.file.path : null;
+    const imageUrl = req.file ? await uploadToCloudinary(req.file.buffer) : null;
 
     const newItem = await menuService.addMenuItem({
       ...req.body,
@@ -107,7 +108,7 @@ router.put('/:menuItemId', authenticateToken, upload.single('image'), async (req
     if (!existing) return res.status(404).json({ error: 'Menu item not found' });
     await verifyRestaurantOwnership(existing.restaurant_id, userId);
 
-    const imageUrl = req.file ? req.file.path : existing.image_url;
+    const imageUrl = req.file ? await uploadToCloudinary(req.file.buffer) : existing.image_url;
 
     const updated = await menuService.updateMenuItem(menuItemId, {
       ...req.body,
