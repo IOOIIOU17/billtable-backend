@@ -32,7 +32,9 @@ router.post('/', authenticateToken, upload.single('image'), async (req, res) => 
     if (price === undefined) return res.status(400).json({ error: 'Missing required fields', missingFields: ['price'] });
     if (price < 0) return res.status(400).json({ error: 'Price cannot be negative' });
 
-    await verifyRestaurantOwnership(restaurantId, userId);
+    if (req.user.role !== 'admin') {
+      await verifyRestaurantOwnership(restaurantId, userId);
+    }
 
     const imageUrl = req.file ? await uploadToCloudinary(req.file.buffer) : null;
 
