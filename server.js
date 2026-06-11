@@ -25,6 +25,7 @@ const restaurantRoutes = require('./routes/restaurantRoutes');
 const menuRoutes = require('./routes/menuRoutes');
 const matchingRoutes = require('./routes/matchingRoutes');
 const userRoutes = require('./routes/userRoutes');
+const settingsRoutes = require('./routes/settingsRoutes');
 
 // Backup
 const { runBackup } = require('./utils/backup');
@@ -55,6 +56,7 @@ app.use('/api/restaurants', restaurantRoutes);
 app.use('/api/menus', menuRoutes);
 app.use('/api/matching', matchingRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/settings', settingsRoutes);
 
 // ============================================================
 // Health Check Endpoint
