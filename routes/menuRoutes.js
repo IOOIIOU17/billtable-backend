@@ -33,7 +33,7 @@ router.post('/', authenticateToken, upload.single('image'), async (req, res) => 
     if (price < 0) return res.status(400).json({ error: 'Price cannot be negative' });
 
     if (req.user.role !== 'admin') {
-      await verifyRestaurantOwnership(restaurantId, userId);
+      if (req.user.role !== 'admin') await verifyRestaurantOwnership(restaurantId, userId);
     }
 
     const imageUrl = req.file ? await uploadToCloudinary(req.file.buffer) : null;
@@ -62,7 +62,7 @@ router.post('/bulk', authenticateToken, async (req, res) => {
     const { restaurantId, items } = req.body;
     if (!restaurantId) return res.status(400).json({ error: 'restaurantId is required' });
     if (!Array.isArray(items) || items.length === 0) return res.status(400).json({ error: 'items must be a non-empty array' });
-    await verifyRestaurantOwnership(restaurantId, userId);
+    if (req.user.role !== 'admin') await verifyRestaurantOwnership(restaurantId, userId);
     const result = await menuService.bulkAddMenuItems(restaurantId, items);
     return res.status(201).json({ message: `${result.insertedCount} menu items added successfully`, ...result });
   } catch (error) {
@@ -108,7 +108,7 @@ router.put('/:menuItemId', authenticateToken, upload.single('image'), async (req
     if (isNaN(menuItemId)) return res.status(400).json({ error: 'Invalid menu item ID' });
     const existing = await menuService.getMenuItemById(menuItemId);
     if (!existing) return res.status(404).json({ error: 'Menu item not found' });
-    await verifyRestaurantOwnership(existing.restaurant_id, userId);
+    if (req.user.role !== 'admin') await verifyRestaurantOwnership(existing.restaurant_id, userId);
 
     const imageUrl = req.file ? await uploadToCloudinary(req.file.buffer) : existing.image_url;
 
@@ -134,7 +134,7 @@ router.patch('/:menuItemId/availability', authenticateToken, async (req, res) =>
     if (typeof isAvailable !== 'boolean') return res.status(400).json({ error: 'isAvailable must be true or false' });
     const existing = await menuService.getMenuItemById(menuItemId);
     if (!existing) return res.status(404).json({ error: 'Menu item not found' });
-    await verifyRestaurantOwnership(existing.restaurant_id, userId);
+    if (req.user.role !== 'admin') await verifyRestaurantOwnership(existing.restaurant_id, userId);
     const updated = await menuService.setMenuItemAvailability(menuItemId, isAvailable);
     return res.status(200).json({ message: `Menu item is now ${isAvailable ? 'available' : 'sold out'}`, menuItem: updated });
   } catch (error) {
@@ -152,7 +152,7 @@ router.delete('/:menuItemId', authenticateToken, async (req, res) => {
     if (isNaN(menuItemId)) return res.status(400).json({ error: 'Invalid menu item ID' });
     const existing = await menuService.getMenuItemById(menuItemId);
     if (!existing) return res.status(404).json({ error: 'Menu item not found' });
-    await verifyRestaurantOwnership(existing.restaurant_id, userId);
+    if (req.user.role !== 'admin') await verifyRestaurantOwnership(existing.restaurant_id, userId);
     const deleted = await menuService.deleteMenuItem(menuItemId);
     if (!deleted) return res.status(500).json({ error: 'Failed to delete menu item' });
     return res.status(200).json({ message: 'Menu item deleted successfully' });
