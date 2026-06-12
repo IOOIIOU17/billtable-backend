@@ -104,7 +104,8 @@ router.get('/all', authenticateToken, async (req, res) => {
         (SELECT COUNT(*) FROM orders o WHERE o.restaurant_id = r.id) as total_orders
        FROM restaurants r
        LEFT JOIN users u ON r.owner_user_id = u.id
-       ORDER BY r.created_at DESC`
+       WHERE r.is_deleted = false
+          ORDER BY r.created_at DESC`
     );
     return res.status(200).json({ restaurants: result.rows });
   } catch (error) {

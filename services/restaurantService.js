@@ -144,6 +144,7 @@ async function updateRestaurant(restaurantId, patch) {
         isActive: 'is_active',
         logoUrl: 'logo_url',
         coverImageUrl: 'cover_image_url',
+        isDeleted: 'is_deleted',
     };
 
     // Build SET clause dynamically based on provided fields
@@ -220,7 +221,7 @@ async function findNearbyRestaurants(params) {
                 )
             ) AS distance_miles
         FROM restaurants
-        WHERE is_active = true
+        WHERE is_active = true AND is_deleted = false
         HAVING (
             3959 * acos(
                 cos(radians($1)) *

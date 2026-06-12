@@ -85,7 +85,7 @@ async function findMatches(requirements) {
 
   // --- STEP 1: ดึงร้านที่ active ทั้งหมด ---
   const restaurantResult = await pool.query(
-    'SELECT * FROM restaurants WHERE is_active = true'
+    'SELECT * FROM restaurants WHERE is_active = true AND is_deleted = false'
   );
   let restaurants = restaurantResult.rows;
 
