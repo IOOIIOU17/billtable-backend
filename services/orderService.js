@@ -6,12 +6,12 @@ const createOrder = async (userId, restaurantId, items, extra = {}) => {
   try {
     const orderNumber = 'BT-' + Date.now().toString().slice(-6) + Math.random().toString(36).slice(2, 6).toUpperCase();
     const totalAmount = items.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
-    const { theme, guestCount, budget, allergies, avoidSpicy, deliveryTime, deliveryAddress } = extra;
+    const { theme, guestCount, budget, allergies, avoidSpicy, deliveryTime, deliveryAddress, latitude, longitude } = extra;
 
     const result = await pool.query(
-      `INSERT INTO orders (user_id, restaurant_id, order_number, total_amount, status, theme, guest_count, budget, allergies, avoid_spicy, delivery_time, delivery_address)
-       VALUES ($1, $2, $3, $4, 'pending', $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
-      [userId, restaurantId, orderNumber, totalAmount, theme, guestCount, budget, allergies, avoidSpicy, deliveryTime, deliveryAddress]
+      `INSERT INTO orders (user_id, restaurant_id, order_number, total_amount, status, theme, guest_count, budget, allergies, avoid_spicy, delivery_time, delivery_address, latitude, longitude)
+       VALUES ($1, $2, $3, $4, 'pending', $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING *`,
+      [userId, restaurantId, orderNumber, totalAmount, theme, guestCount, budget, allergies, avoidSpicy, deliveryTime, deliveryAddress, latitude, longitude]
     );
 
     const orderId = result.rows[0].id;

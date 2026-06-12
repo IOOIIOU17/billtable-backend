@@ -8,11 +8,11 @@ const pool = require('../db');
 // POST /api/orders
 router.post('/', authenticateToken, async (req, res) => {
   try {
-    const { restaurantId, items, theme, guestCount, budget, allergies, avoidSpicy, deliveryTime, deliveryAddress } = req.body;
+    const { restaurantId, items, theme, guestCount, budget, allergies, avoidSpicy, deliveryTime, deliveryAddress, latitude, longitude } = req.body;
     if (!restaurantId || !items) {
       return res.status(400).json({ status: 'ERROR', message: 'Restaurant ID and items are required' });
     }
-    const order = await orderService.createOrder(req.user.userId, restaurantId, items, { theme, guestCount, budget, allergies, avoidSpicy, deliveryTime, deliveryAddress });
+    const order = await orderService.createOrder(req.user.userId, restaurantId, items, { theme, guestCount, budget, allergies, avoidSpicy, deliveryTime, deliveryAddress, latitude, longitude });
     return res.status(201).json({ status: 'OK', message: 'Order created successfully', data: order });
   } catch (error) {
     logger.error({ error: error.message }, 'Create order endpoint error');
