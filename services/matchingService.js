@@ -116,14 +116,23 @@ async function findMatches(requirements) {
     });
   }
 
-  // --- STEP 4: สำหรับแต่ละร้าน หาเมนูที่ match ---
+  // --- STEP 4: ดึงเมนูของทุกร้านที่ filtered แล้วในครั้งเดียว (แก้ N+1 query) ---
+  const restaurantIds = filtered.map((r) => r.id);
+  const menusByRestaurant = {};
+  if (restaurantIds.length > 0) {
+    const menuResult = await pool.query(
+      'SELECT * FROM menus WHERE restaurant_id = ANY($1) AND is_available = true',
+      [restaurantIds]
+    );
+    for (const menu of menuResult.rows) {
+      if (!menusByRestaurant[menu.restaurant_id]) menusByRestaurant[menu.restaurant_id] = [];
+      menusByRestaurant[menu.restaurant_id].push(menu);
+    }
+  }
+
   const matches = [];
   for (const restaurant of filtered) {
-    const menuResult = await pool.query(
-      'SELECT * FROM menus WHERE restaurant_id = $1 AND is_available = true',
-      [restaurant.id]
-    );
-    let menus = menuResult.rows;
+    let menus = menusByRestaurant[restaurant.id] || [];
 
     // กรองเมนูตาม allergy + taste
     const safeMenus = menus.filter((menu) => {
