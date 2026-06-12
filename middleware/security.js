@@ -22,7 +22,7 @@ const corsMiddleware = cors({
 // 3. Rate Limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 50000, // TEMP: load testing only, revert to 500 after
+  max: 500,
   message: 'Too many requests, please try again later'
 });
 
