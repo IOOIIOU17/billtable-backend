@@ -27,6 +27,7 @@ const matchingRoutes = require('./routes/matchingRoutes');
 const userRoutes = require('./routes/userRoutes');
 const settingsRoutes = require('./routes/settingsRoutes');
 const healthRoutes = require('./routes/healthRoutes');
+const addressRoutes = require('./routes/addressRoutes');
 
 // Backup
 const { runBackup } = require('./utils/backup');
@@ -59,6 +60,7 @@ app.use('/api/matching', matchingRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/health', healthRoutes);
+app.use('/api/addresses', addressRoutes);
 
 // ============================================================
 // Health Check Endpoint
