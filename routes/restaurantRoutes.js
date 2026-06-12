@@ -105,7 +105,7 @@ router.get('/all', authenticateToken, async (req, res) => {
        FROM restaurants r
        LEFT JOIN users u ON r.owner_user_id = u.id
        WHERE r.is_deleted = false
-          ORDER BY r.created_at DESC`
+          ORDER BY r.created_at DESC, r.id ASC`
     );
     return res.status(200).json({ restaurants: result.rows });
   } catch (error) {
