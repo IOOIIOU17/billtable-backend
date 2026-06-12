@@ -20,6 +20,8 @@ const router = express.Router();
 const restaurantService = require('../services/restaurantService');
 const { authenticateToken } = require('../middleware/auth');
 const db = require('../db');
+const upload = require('../middleware/upload');
+const uploadToCloudinary = require('../middleware/cloudinaryUpload');
 
 router.post('/register', authenticateToken, async (req, res) => {
     try {
@@ -153,6 +155,35 @@ router.patch('/:restaurantId', authenticateToken, async (req, res) => {
     } catch (error) {
         console.error('Error updating restaurant:', error);
         return res.status(500).json({ error: 'Failed to update restaurant' });
+    }
+});
+
+router.patch('/:restaurantId/cover-image', authenticateToken, upload.single('image'), async (req, res) => {
+    try {
+        const restaurantId = parseInt(req.params.restaurantId, 10);
+        const userId = req.user.userId;
+
+        if (isNaN(restaurantId)) {
+            return res.status(400).json({ error: 'Invalid restaurant ID' });
+        }
+
+        const existing = await restaurantService.getRestaurantById(restaurantId);
+        if (!existing) {
+            return res.status(404).json({ error: 'Restaurant not found' });
+        }
+        if (req.user.role !== 'admin' && existing.owner_user_id !== userId) {
+            return res.status(403).json({ error: 'You do not have permission to update this restaurant' });
+        }
+        if (!req.file) {
+            return res.status(400).json({ error: 'No image file provided' });
+        }
+
+        const imageUrl = await uploadToCloudinary(req.file.buffer);
+        const updated = await restaurantService.updateRestaurant(restaurantId, { coverImageUrl: imageUrl });
+        return res.status(200).json({ message: 'Cover image updated successfully', restaurant: updated });
+    } catch (error) {
+        console.error('Error updating cover image:', error);
+        return res.status(500).json({ error: 'Failed to update cover image' });
     }
 });
 
