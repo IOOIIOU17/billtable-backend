@@ -5,6 +5,26 @@
 
 const pool = require('../db');
 
+// --- Cache รายชื่อร้านที่ active (STEP 1) — TTL 30 วินาที ---
+// เหตุผล: ทุก request ของ matching ต้อง query รายการนี้เหมือนกันหมด
+// แต่รายชื่อร้านเปลี่ยนไม่บ่อย -> cache ไว้ลด DB load ตอนคนสั่งพร้อมกันมากๆ
+let restaurantsCache = null;
+let restaurantsCacheTime = 0;
+const RESTAURANTS_CACHE_TTL = 30 * 1000;
+
+async function getActiveRestaurants() {
+  const now = Date.now();
+  if (restaurantsCache && (now - restaurantsCacheTime) < RESTAURANTS_CACHE_TTL) {
+    return restaurantsCache;
+  }
+  const result = await pool.query(
+    'SELECT * FROM restaurants WHERE is_active = true AND is_deleted = false'
+  );
+  restaurantsCache = result.rows;
+  restaurantsCacheTime = now;
+  return restaurantsCache;
+}
+
 // ============================================================
 // HELPER 1: คำนวณระยะทางระหว่าง 2 จุด (Haversine formula)
 // คืนค่าเป็นไมล์
@@ -83,11 +103,8 @@ async function findMatches(requirements) {
     guest_count = 1,
   } = requirements;
 
-  // --- STEP 1: ดึงร้านที่ active ทั้งหมด ---
-  const restaurantResult = await pool.query(
-    'SELECT * FROM restaurants WHERE is_active = true AND is_deleted = false'
-  );
-  let restaurants = restaurantResult.rows;
+  // --- STEP 1: ดึงร้านที่ active ทั้งหมด (จาก cache ถ้ายังไม่หมดอายุ) ---
+  let restaurants = await getActiveRestaurants();
 
   // --- STEP 2: กรองตามระยะทาง (ในรัศมีส่งได้) ---
   const nearbyRestaurants = [];
