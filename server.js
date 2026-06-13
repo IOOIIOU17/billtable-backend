@@ -100,6 +100,11 @@ app.get('/health', async (req, res) => {
   }
 });
 
+// TEMP: Sentry test route - ลบทิ้งหลังเทสผ่าน
+app.get('/debug-sentry', function mainHandler(req, res) {
+  throw new Error('My first Sentry error!');
+});
+
 // ============================================================
 // 404 Handler
 // ============================================================
@@ -124,11 +129,6 @@ app.use((err, req, res, next) => {
 });
 
 // ============================================================
-// TEMP: Sentry test route - ลบทิ้งหลังเทสผ่าน
-app.get('/debug-sentry', function mainHandler(req, res) {
-  throw new Error('My first Sentry error!');
-});
-
 // Sentry error handler (ต้องอยู่หลัง routes ทั้งหมด ก่อน error middleware อื่น)
 Sentry.setupExpressErrorHandler(app);
 
