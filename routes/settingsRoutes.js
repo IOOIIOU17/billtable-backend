@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { authenticateToken } = require('../middleware/auth');
+const { authenticateToken, requireRole } = require('../middleware/auth');
 const pool = require('../db');
 
 // GET /api/settings — ดึงค่าทั้งหมด
@@ -16,7 +16,7 @@ router.get('/', authenticateToken, async (req, res) => {
 });
 
 // PUT /api/settings — อัพเดทค่า
-router.put('/', authenticateToken, async (req, res) => {
+router.put('/', authenticateToken, requireRole('admin'), async (req, res) => {
   try {
     const updates = req.body
     for (const [key, value] of Object.entries(updates)) {

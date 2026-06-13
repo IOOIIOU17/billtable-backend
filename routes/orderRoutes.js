@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const orderService = require('../services/orderService');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticateToken, requireRole } = require('../middleware/auth');
 const { logger } = require('../middleware/logger');
 const pool = require('../db');
 
@@ -22,7 +22,7 @@ router.post('/', authenticateToken, async (req, res) => {
 
 
 // GET /api/orders/all (Admin only)
-router.get('/all', authenticateToken, async (req, res) => {
+router.get('/all', authenticateToken, requireRole('admin'), async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT o.*, u.name as customer_name, u.email as customer_email,

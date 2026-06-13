@@ -1,9 +1,9 @@
 const express = require('express');
 const router = express.Router();
-const { authenticateToken } = require('../middleware/auth');
+const { authenticateToken, requireRole } = require('../middleware/auth');
 const db = require('../db');
 
-router.get('/all', authenticateToken, async (req, res) => {
+router.get('/all', authenticateToken, requireRole('admin'), async (req, res) => {
   try {
     const result = await db.query(
       `SELECT id, name, email, role, created_at FROM users ORDER BY created_at DESC`

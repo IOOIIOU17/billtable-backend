@@ -18,7 +18,7 @@
 const express = require('express');
 const router = express.Router();
 const restaurantService = require('../services/restaurantService');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticateToken, requireRole } = require('../middleware/auth');
 const db = require('../db');
 
 router.post('/register', authenticateToken, async (req, res) => {
@@ -97,7 +97,7 @@ router.get('/nearby', async (req, res) => {
 });
 
 
-router.get('/all', authenticateToken, async (req, res) => {
+router.get('/all', authenticateToken, requireRole('admin'), async (req, res) => {
   try {
     const result = await db.query(
       `SELECT r.*, u.email as owner_email,
