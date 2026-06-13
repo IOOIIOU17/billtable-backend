@@ -117,6 +117,11 @@ app.use((req, res) => {
 });
 
 // ============================================================
+// Sentry error handler (ต้องอยู่ก่อน error middleware อื่น เพื่อ capture error ได้)
+// ============================================================
+Sentry.setupExpressErrorHandler(app);
+
+// ============================================================
 // Error Handler
 // ============================================================
 app.use((err, req, res, next) => {
@@ -127,10 +132,6 @@ app.use((err, req, res, next) => {
     error: config.NODE_ENV === 'development' ? err.message : undefined,
   });
 });
-
-// ============================================================
-// Sentry error handler (ต้องอยู่หลัง routes ทั้งหมด ก่อน error middleware อื่น)
-Sentry.setupExpressErrorHandler(app);
 
 // ============================================================
 // Start Server
