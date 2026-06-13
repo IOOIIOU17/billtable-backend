@@ -74,6 +74,18 @@ router.get('/:orderId', authenticateToken, async (req, res) => {
     if (!order) {
       return res.status(404).json({ status: 'ERROR', message: 'Order not found' });
     }
+
+    // --- IDOR protection: เช็คว่ามีสิทธิ์ดู order นี้จริงไหม ---
+    if (req.user.role !== 'admin' && order.user_id !== req.user.userId) {
+      const ownerCheck = await pool.query(
+        'SELECT id FROM restaurants WHERE id = $1 AND owner_user_id = $2',
+        [order.restaurant_id, req.user.userId]
+      );
+      if (ownerCheck.rows.length === 0) {
+        return res.status(403).json({ status: 'ERROR', message: 'Not authorized to view this order' });
+      }
+    }
+
     return res.status(200).json({ status: 'OK', data: { order } });
   } catch (error) {
     logger.error({ error: error.message }, 'Get order endpoint error');
@@ -88,6 +100,19 @@ router.patch('/:orderId/status', authenticateToken, async (req, res) => {
     if (!status) {
       return res.status(400).json({ status: 'ERROR', message: 'Status is required' });
     }
+
+    // --- IDOR protection: เฉพาะ admin หรือร้านที่เป็นเจ้าของ order นี้เท่านั้น ---
+    const existing = await orderService.getOrderById(req.params.orderId);
+    if (req.user.role !== 'admin') {
+      const ownerCheck = await pool.query(
+        'SELECT id FROM restaurants WHERE id = $1 AND owner_user_id = $2',
+        [existing.restaurant_id, req.user.userId]
+      );
+      if (ownerCheck.rows.length === 0) {
+        return res.status(403).json({ status: 'ERROR', message: 'Not authorized to update this order' });
+      }
+    }
+
     const order = await orderService.updateOrderStatus(req.params.orderId, status);
     return res.status(200).json({ status: 'OK', message: 'Order status updated', data: order });
   } catch (error) {
