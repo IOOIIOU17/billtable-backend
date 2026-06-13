@@ -121,4 +121,38 @@ router.patch('/:orderId/status', authenticateToken, async (req, res) => {
   }
 });
 
+// PATCH /api/orders/:orderId/rating
+router.patch('/:orderId/rating', authenticateToken, async (req, res) => {
+  try {
+    const { rating, review } = req.body;
+
+    if (!rating || rating < 1 || rating > 5 || !Number.isInteger(rating)) {
+      return res.status(400).json({ status: 'ERROR', message: 'Rating must be an integer between 1 and 5' });
+    }
+
+    const existing = await orderService.getOrderById(req.params.orderId);
+
+    // เฉพาะเจ้าของ order เท่านั้น
+    if (existing.user_id !== req.user.userId) {
+      return res.status(403).json({ status: 'ERROR', message: 'Not authorized to rate this order' });
+    }
+
+    // ต้อง delivered แล้วเท่านั้น
+    if (existing.status !== 'delivered') {
+      return res.status(400).json({ status: 'ERROR', message: 'You can only rate delivered orders' });
+    }
+
+    // ห้ามแก้ rating ที่ส่งไปแล้ว
+    if (existing.rating !== null) {
+      return res.status(400).json({ status: 'ERROR', message: 'This order has already been rated' });
+    }
+
+    const order = await orderService.submitRating(req.params.orderId, rating, review);
+    return res.status(200).json({ status: 'OK', message: 'Rating submitted', data: { order } });
+  } catch (error) {
+    logger.error({ error: error.message }, 'Submit rating error');
+    return res.status(400).json({ status: 'ERROR', message: error.message });
+  }
+});
+
 module.exports = router;

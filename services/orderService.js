@@ -97,4 +97,19 @@ const getRestaurantOrders = async (restaurantId) => {
   }
 };
 
-module.exports = { createOrder, getOrderById, getUserOrders, updateOrderStatus, getRestaurantOrders };
+// Submit rating & review (เฉพาะ order ที่ delivered แล้ว)
+const submitRating = async (orderId, rating, review) => {
+  try {
+    const result = await pool.query(
+      'UPDATE orders SET rating = $1, review = $2, updated_at = NOW() WHERE id = $3 RETURNING *',
+      [rating, review || null, orderId]
+    );
+    if (result.rows.length === 0) throw new Error('Order not found');
+    return result.rows[0];
+  } catch (error) {
+    logger.error({ error: error.message }, 'Submit rating failed');
+    throw error;
+  }
+};
+
+module.exports = { createOrder, getOrderById, getUserOrders, updateOrderStatus, getRestaurantOrders, submitRating };
