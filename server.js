@@ -1,3 +1,6 @@
+require('./instrument.js');
+const Sentry = require('@sentry/node');
+
 /**
  * ============================================================
  * BillTable Backend Server
@@ -119,6 +122,15 @@ app.use((err, req, res, next) => {
     error: config.NODE_ENV === 'development' ? err.message : undefined,
   });
 });
+
+// ============================================================
+// TEMP: Sentry test route - ลบทิ้งหลังเทสผ่าน
+app.get('/debug-sentry', function mainHandler(req, res) {
+  throw new Error('My first Sentry error!');
+});
+
+// Sentry error handler (ต้องอยู่หลัง routes ทั้งหมด ก่อน error middleware อื่น)
+Sentry.setupExpressErrorHandler(app);
 
 // ============================================================
 // Start Server
