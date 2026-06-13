@@ -26,8 +26,6 @@ const loginLimiter = (req, res, next) => {
   }
 
   record.count++;
-  res.set('X-Debug-IP', String(ip));
-  res.set('X-Debug-Count', String(record.count));
   next();
 };
 
