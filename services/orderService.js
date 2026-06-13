@@ -47,7 +47,23 @@ const getOrderById = async (orderId) => {
 const getUserOrders = async (userId) => {
   try {
     const result = await pool.query('SELECT * FROM orders WHERE user_id = $1 ORDER BY created_at DESC', [userId]);
-    return result.rows;
+    const orders = result.rows;
+
+    // ดึง order_items ของทุก order ในครั้งเดียว (แก้ N+1)
+    const orderIds = orders.map((o) => o.id);
+    if (orderIds.length > 0) {
+      const itemsResult = await pool.query('SELECT * FROM order_items WHERE order_id = ANY($1)', [orderIds]);
+      const itemsByOrder = {};
+      for (const item of itemsResult.rows) {
+        if (!itemsByOrder[item.order_id]) itemsByOrder[item.order_id] = [];
+        itemsByOrder[item.order_id].push(item);
+      }
+      for (const order of orders) {
+        order.order_items = itemsByOrder[order.id] || [];
+      }
+    }
+
+    return orders;
   } catch (error) {
     logger.error({ error: error.message }, 'Get user orders failed');
     throw error;
