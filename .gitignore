@@ -1,2 +1,7 @@
 node_modules/
 .env
+
+# Temp test scripts (never commit)
+*-test.js
+*-verify.js
+loadtest.js
