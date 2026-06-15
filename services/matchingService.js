@@ -103,21 +103,6 @@ async function findMatches(requirements) {
     guest_count = 1,
   } = requirements;
 
-  // --- TEMP LOCK FOR TESTING: force Downy Thai Kitchen only ---
-  const TEMP_LOCK_RESTAURANT_ID = 6;
-  if (TEMP_LOCK_RESTAURANT_ID) {
-    const result = await pool.query(
-      'SELECT r.*, m.id as menu_id, m.name as menu_name, m.price, m.description FROM restaurants r LEFT JOIN menus m ON m.restaurant_id = r.id WHERE r.id = $1',
-      [TEMP_LOCK_RESTAURANT_ID]
-    );
-    if (result.rows.length > 0) {
-      const r = result.rows[0];
-      const menus = result.rows.map(row => ({ id: row.menu_id, name: row.menu_name, price: row.price, description: row.description }));
-      return [{ id: r.id, name: r.name, address: r.address, city: r.city, phone: r.phone, distance: 1.0, score: 100, recommended_menus: menus.slice(0, 5) }];
-    }
-  }
-  // --- END TEMP LOCK ---
-
   // --- STEP 1: ดึงร้านที่ active ทั้งหมด (จาก cache ถ้ายังไม่หมดอายุ) ---
   let restaurants = await getActiveRestaurants();
 
