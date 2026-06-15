@@ -43,12 +43,17 @@ router.get('/all', authenticateToken, requireRole('admin'), async (req, res) => 
 router.get('/restaurant', authenticateToken, async (req, res) => {
   try {
     const ownerUserId = req.user.userId;
-    const result = await pool.query('SELECT id FROM restaurants WHERE owner_user_id = $1 LIMIT 1', [ownerUserId]);
+    const result = await pool.query('SELECT id FROM restaurants WHERE owner_user_id = $1', [ownerUserId]);
     if (result.rows.length === 0) {
       return res.status(404).json({ status: 'ERROR', message: 'Restaurant not found for this owner' });
     }
-    const restaurantId = result.rows[0].id;
-    const orders = await orderService.getRestaurantOrders(restaurantId);
+    const restaurantIds = result.rows.map(r => r.id);
+    const placeholders = restaurantIds.map((_, i) => `$${i + 1}`).join(', ');
+    const ordersResult = await pool.query(
+      `SELECT o.*, r.name as restaurant_name FROM orders o LEFT JOIN restaurants r ON o.restaurant_id = r.id WHERE o.restaurant_id IN (${placeholders}) ORDER BY o.created_at DESC`,
+      restaurantIds
+    );
+    const orders = ordersResult.rows;
     return res.status(200).json({ status: 'OK', data: { orders } });
   } catch (error) {
     logger.error({ error: error.message }, 'Get restaurant orders error');
