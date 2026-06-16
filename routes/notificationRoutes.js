@@ -41,12 +41,18 @@ router.post('/send-restaurant', authenticateToken, async (req, res) => {
       return res.status(200).json({ status: 'OK', message: 'No subscription found' });
     }
     const subscription = JSON.parse(result.rows[0].subscription);
-    await webpush.sendNotification(subscription, JSON.stringify({
-      title: '🔔 New Order!',
-      body: `Order #${orderNumber} is waiting for your confirmation.`,
-      orderId
-    }));
-    return res.status(200).json({ status: 'OK', message: 'Notification sent' });
+    try {
+      const pushResult = await webpush.sendNotification(subscription, JSON.stringify({
+        title: '🔔 New Order!',
+        body: `Order #${orderNumber} is waiting for your confirmation.`,
+        orderId
+      }));
+      console.log('WEBPUSH_SUCCESS:', JSON.stringify(pushResult));
+      return res.status(200).json({ status: 'OK', message: 'Notification sent' });
+    } catch (pushError) {
+      console.log('WEBPUSH_FAILED:', pushError.statusCode, pushError.body, pushError.message);
+      return res.status(200).json({ status: 'OK', message: 'Push failed but logged', debug: pushError.message });
+    }
   } catch (error) {
     return res.status(400).json({ status: 'ERROR', message: error.message });
   }
