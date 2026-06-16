@@ -4,7 +4,7 @@ const loginLimiter = (req, res, next) => {
   const ip = req.ip || req.connection.remoteAddress;
   const now = Date.now();
   const windowMs = 15 * 60 * 1000; // 15 minutes
-  const maxAttempts = 5;
+  const maxAttempts = 50;
 
   if (!loginAttempts[ip]) {
     loginAttempts[ip] = { count: 0, firstAttempt: now };
