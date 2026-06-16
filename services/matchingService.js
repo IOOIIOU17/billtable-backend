@@ -169,8 +169,8 @@ async function findMatches(requirements) {
       safeMenus.length;
     const estimatedTotal = avgPrice * guest_count;
 
-    // ถ้ามี budget และราคาประเมินเกิน budget → ข้าม
-    if (budget && estimatedTotal > budget) continue;
+    // Budget filter removed — AI always finds a match
+    // Budget warning is shown to customer in Summary page instead
 
     // --- คำนวณคะแนน ---
     const score = calculateScore(
