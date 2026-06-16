@@ -6,6 +6,15 @@ const { authenticateToken, requireRole } = require('../middleware/auth');
 const { logger } = require('../middleware/logger');
 const pool = require('../db');
 
+// ตรวจสอบว่า orderId เป็นตัวเลขก่อนส่งเข้า database
+// ป้องกัน database error message หลุดออกมา (เช่น "invalid input syntax for type integer")
+function validateOrderId(req, res, next) {
+  if (!/^\d+$/.test(req.params.orderId)) {
+    return res.status(400).json({ status: 'ERROR', message: 'Invalid order ID' });
+  }
+  next();
+}
+
 // POST /api/orders
 router.post('/', authenticateToken, async (req, res) => {
   try {
@@ -89,7 +98,7 @@ router.get('/', authenticateToken, async (req, res) => {
 });
 
 // GET /api/orders/:orderId
-router.get('/:orderId', authenticateToken, async (req, res) => {
+router.get('/:orderId', authenticateToken, validateOrderId, async (req, res) => {
   try {
     const order = await orderService.getOrderById(req.params.orderId);
     if (!order) {
@@ -115,7 +124,7 @@ router.get('/:orderId', authenticateToken, async (req, res) => {
 });
 
 // PATCH /api/orders/:orderId/status
-router.patch('/:orderId/status', authenticateToken, async (req, res) => {
+router.patch('/:orderId/status', authenticateToken, validateOrderId, async (req, res) => {
   try {
     const { status } = req.body;
     if (!status) {
@@ -143,7 +152,7 @@ router.patch('/:orderId/status', authenticateToken, async (req, res) => {
 });
 
 // PATCH /api/orders/:orderId/rating
-router.patch('/:orderId/rating', authenticateToken, async (req, res) => {
+router.patch('/:orderId/rating', authenticateToken, validateOrderId, async (req, res) => {
   try {
     const { rating, review } = req.body;
 
