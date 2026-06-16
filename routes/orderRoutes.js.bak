@@ -1,7 +1,6 @@
 const express = require('express');
 const router = express.Router();
 const orderService = require('../services/orderService');
-const { generateClosingMessage } = require('../services/closingMessageService');
 const { authenticateToken, requireRole } = require('../middleware/auth');
 const { logger } = require('../middleware/logger');
 const pool = require('../db');
@@ -58,21 +57,6 @@ router.get('/restaurant', authenticateToken, async (req, res) => {
     return res.status(200).json({ status: 'OK', data: { orders } });
   } catch (error) {
     logger.error({ error: error.message }, 'Get restaurant orders error');
-    return res.status(400).json({ status: 'ERROR', message: error.message });
-  }
-});
-
-// GET /api/orders/closing-message
-// Returns the personalized AI closing message for the Confirmation screen,
-// based on the customer's chosen Theme + Guest Count.
-// Must stay above /:orderId so Express doesn't treat "closing-message" as an orderId.
-router.get('/closing-message', authenticateToken, async (req, res) => {
-  try {
-    const { theme, guestCount } = req.query;
-    const message = generateClosingMessage(theme, guestCount);
-    return res.status(200).json({ status: 'OK', data: { message } });
-  } catch (error) {
-    logger.error({ error: error.message }, 'Get closing message error');
     return res.status(400).json({ status: 'ERROR', message: error.message });
   }
 });
