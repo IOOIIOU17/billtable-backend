@@ -7,12 +7,13 @@ const express = require('express');
 const router = express.Router();
 const { findMatches } = require('../services/matchingService');
 const { authenticateToken } = require('../middleware/auth');
+const { matchingLimiter } = require('../middleware/rateLimit');
 
 // ============================================================
 // POST /api/matching/find
 // รับ requirements ของลูกค้า → คืนร้าน+เมนูที่ match (top 5)
 // ============================================================
-router.post('/find', authenticateToken, async (req, res) => {
+router.post('/find', authenticateToken, matchingLimiter, async (req, res) => {
   try {
     const {
       latitude,

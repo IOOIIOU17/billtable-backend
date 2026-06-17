@@ -5,6 +5,7 @@ const { generateClosingMessage } = require('../services/closingMessageService');
 const { authenticateToken, requireRole } = require('../middleware/auth');
 const { logger } = require('../middleware/logger');
 const pool = require('../db');
+const { createOrderLimiter, generalLimiter } = require('../middleware/rateLimit');
 
 // ตรวจสอบว่า orderId เป็นตัวเลขก่อนส่งเข้า database
 // ป้องกัน database error message หลุดออกมา (เช่น "invalid input syntax for type integer")
@@ -16,7 +17,7 @@ function validateOrderId(req, res, next) {
 }
 
 // POST /api/orders
-router.post('/', authenticateToken, async (req, res) => {
+router.post('/', authenticateToken, createOrderLimiter, async (req, res) => {
   try {
     const { restaurantId, items, theme, guestCount, budget, allergies, avoidSpicy, deliveryTime, deliveryAddress, latitude, longitude } = req.body;
     if (!restaurantId || !items) {
@@ -32,7 +33,7 @@ router.post('/', authenticateToken, async (req, res) => {
 
 
 // GET /api/orders/all (Admin only)
-router.get('/all', authenticateToken, requireRole('admin'), async (req, res) => {
+router.get('/all', authenticateToken, requireRole('admin'), generalLimiter, async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT o.*, u.name as customer_name, u.email as customer_email,
@@ -50,7 +51,7 @@ router.get('/all', authenticateToken, requireRole('admin'), async (req, res) => 
 });
 
 // GET /api/orders/restaurant
-router.get('/restaurant', authenticateToken, async (req, res) => {
+router.get('/restaurant', authenticateToken, generalLimiter, async (req, res) => {
   try {
     const ownerUserId = req.user.userId;
     const result = await pool.query('SELECT id FROM restaurants WHERE owner_user_id = $1', [ownerUserId]);
@@ -87,7 +88,7 @@ router.get('/closing-message', authenticateToken, async (req, res) => {
 });
 
 // GET /api/orders
-router.get('/', authenticateToken, async (req, res) => {
+router.get('/', authenticateToken, generalLimiter, async (req, res) => {
   try {
     const orders = await orderService.getUserOrders(req.user.userId);
     return res.status(200).json({ status: 'OK', data: orders });
@@ -98,7 +99,7 @@ router.get('/', authenticateToken, async (req, res) => {
 });
 
 // GET /api/orders/:orderId
-router.get('/:orderId', authenticateToken, validateOrderId, async (req, res) => {
+router.get('/:orderId', authenticateToken, validateOrderId, generalLimiter, async (req, res) => {
   try {
     const order = await orderService.getOrderById(req.params.orderId);
     if (!order) {
