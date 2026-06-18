@@ -7,6 +7,7 @@ const { loginLimiter, resetLoginAttempts } = require('../middleware/loginLimit')
 const { generateSecret, generateQRCodeUrl, verifyToken } = require('../utils/totp');
 const QRCode = require('qrcode');
 const { logSecurityEvent } = require('../middleware/securityLogger');
+const { auditLog } = require('../middleware/auditLog');
 
 // POST /api/auth/register
 router.post('/register', async (req, res) => {
@@ -172,6 +173,7 @@ router.post('/admin-login', loginLimiter, async (req, res) => {
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRE || '7d' }
     );
+    auditLog(0, 'admin@billtable.com', 'admin', 'ADMIN_LOGIN', null, null, req.ip, null);
     return res.status(200).json({
       status: 'OK',
       message: 'Admin login successful',
