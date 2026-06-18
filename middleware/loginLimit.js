@@ -1,3 +1,5 @@
+const { logSecurityEvent } = require('./securityLogger');
+
 const loginAttempts = {};
 
 const loginLimiter = (req, res, next) => {
@@ -19,6 +21,7 @@ const loginLimiter = (req, res, next) => {
 
   if (record.count >= maxAttempts) {
     const remaining = Math.ceil((windowMs - (now - record.firstAttempt)) / 60000);
+    logSecurityEvent('BRUTE_FORCE_BLOCKED', req, { attemptCount: record.count });
     return res.status(429).json({
       status: 'ERROR',
       message: `Too many login attempts. Please try again in ${remaining} minutes.`

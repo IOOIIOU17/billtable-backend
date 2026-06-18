@@ -6,11 +6,13 @@ const { authenticateToken, requireRole } = require('../middleware/auth');
 const { logger } = require('../middleware/logger');
 const pool = require('../db');
 const { createOrderLimiter, generalLimiter } = require('../middleware/rateLimit');
+const { logSecurityEvent } = require('../middleware/securityLogger');
 
 // ตรวจสอบว่า orderId เป็นตัวเลขก่อนส่งเข้า database
 // ป้องกัน database error message หลุดออกมา (เช่น "invalid input syntax for type integer")
 function validateOrderId(req, res, next) {
   if (!/^\d+$/.test(req.params.orderId)) {
+    logSecurityEvent('INVALID_ORDER_ID', req, { rawOrderId: req.params.orderId });
     return res.status(400).json({ status: 'ERROR', message: 'Invalid order ID' });
   }
   next();
@@ -113,6 +115,7 @@ router.get('/:orderId', authenticateToken, validateOrderId, generalLimiter, asyn
         [order.restaurant_id, req.user.userId]
       );
       if (ownerCheck.rows.length === 0) {
+        logSecurityEvent('IDOR_BLOCKED', req, { targetOrderId: req.params.orderId, action: 'view' });
         return res.status(403).json({ status: 'ERROR', message: 'Not authorized to view this order' });
       }
     }
@@ -140,6 +143,7 @@ router.patch('/:orderId/status', authenticateToken, validateOrderId, async (req,
         [existing.restaurant_id, req.user.userId]
       );
       if (ownerCheck.rows.length === 0) {
+        logSecurityEvent('IDOR_BLOCKED', req, { targetOrderId: req.params.orderId, action: 'update_status' });
         return res.status(403).json({ status: 'ERROR', message: 'Not authorized to update this order' });
       }
     }
@@ -165,6 +169,7 @@ router.patch('/:orderId/rating', authenticateToken, validateOrderId, async (req,
 
     // เฉพาะเจ้าของ order เท่านั้น
     if (existing.user_id !== req.user.userId) {
+      logSecurityEvent('IDOR_BLOCKED', req, { targetOrderId: req.params.orderId, action: 'rate' });
       return res.status(403).json({ status: 'ERROR', message: 'Not authorized to rate this order' });
     }
 
