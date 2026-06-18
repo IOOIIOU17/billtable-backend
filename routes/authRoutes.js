@@ -4,6 +4,9 @@ const userService = require('../services/userService');
 const { authenticateToken } = require('../middleware/auth');
 const { logger } = require('../middleware/logger');
 const { loginLimiter, resetLoginAttempts } = require('../middleware/loginLimit');
+const { generateSecret, generateQRCodeUrl, verifyToken } = require('../utils/totp');
+const QRCode = require('qrcode');
+const { logSecurityEvent } = require('../middleware/securityLogger');
 
 // POST /api/auth/register
 router.post('/register', async (req, res) => {
@@ -121,13 +124,48 @@ router.post('/restaurant-register', async (req, res) => {
   }
 });
 
+// GET /api/auth/admin-2fa-setup
+// ใช้ครั้งเดียวตอน setup 2FA — สร้าง secret ใหม่ + แสดง QR code ให้ scan
+// ⚠️ ลบ/ปิด route นี้หลัง setup เสร็จ ป้องกันคนอื่นมาสร้าง secret ใหม่ทับ
+router.get('/admin-2fa-setup', async (req, res) => {
+  try {
+    const secret = generateSecret();
+    const otpUrl = generateQRCodeUrl(secret);
+    const qrCodeDataUrl = await QRCode.toDataURL(otpUrl);
+    return res.status(200).json({
+      status: 'OK',
+      message: 'Scan this QR code with Google Authenticator, then save the secret to ADMIN_TOTP_SECRET env var on Render',
+      secret,
+      qrCodeDataUrl,
+    });
+  } catch (error) {
+    logger.error({ error: error.message }, '2FA setup error');
+    return res.status(400).json({ status: 'ERROR', message: error.message });
+  }
+});
+
 // POST /api/auth/admin-login
 router.post('/admin-login', loginLimiter, async (req, res) => {
   try {
-    const { password } = req.body;
+    const { password, totpToken } = req.body;
     if (password !== process.env.ADMIN_PASSWORD) {
       return res.status(401).json({ status: 'ERROR', message: 'Invalid admin password' });
     }
+
+    // --- 2FA verification ---
+    if (!process.env.ADMIN_TOTP_SECRET) {
+      logger.error({}, 'ADMIN_TOTP_SECRET not configured — 2FA setup incomplete');
+      return res.status(500).json({ status: 'ERROR', message: 'Admin 2FA not configured. Contact developer.' });
+    }
+    if (!totpToken) {
+      return res.status(400).json({ status: 'ERROR', message: '2FA code is required' });
+    }
+    const isValidTotp = verifyToken(totpToken, process.env.ADMIN_TOTP_SECRET);
+    if (!isValidTotp) {
+      logSecurityEvent('ADMIN_2FA_FAILED', req, {});
+      return res.status(401).json({ status: 'ERROR', message: 'Invalid 2FA code' });
+    }
+
     const jwt = require('jsonwebtoken');
     const accessToken = jwt.sign(
       { userId: 0, email: 'admin@billtable.com', role: 'admin' },
