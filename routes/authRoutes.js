@@ -160,7 +160,7 @@ router.post('/admin-login', loginLimiter, async (req, res) => {
     if (!totpToken) {
       return res.status(400).json({ status: 'ERROR', message: '2FA code is required' });
     }
-    const isValidTotp = verifyToken(totpToken, process.env.ADMIN_TOTP_SECRET);
+    const isValidTotp = await verifyToken(totpToken, process.env.ADMIN_TOTP_SECRET);
     if (!isValidTotp) {
       logSecurityEvent('ADMIN_2FA_FAILED', req, {});
       return res.status(401).json({ status: 'ERROR', message: 'Invalid 2FA code' });
