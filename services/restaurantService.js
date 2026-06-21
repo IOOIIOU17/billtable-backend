@@ -98,6 +98,24 @@ async function getRestaurantById(restaurantId) {
 }
 
 /**
+ * Get a restaurant by ID for PUBLIC access (customer-facing).
+ * Excludes soft-deleted restaurants, unlike getRestaurantById which
+ * is used internally for owner/admin operations that may need to
+ * access a restaurant even after it's been soft-deleted.
+ */
+async function getPublicRestaurantById(restaurantId) {
+    const query = `
+        SELECT *
+        FROM restaurants
+        WHERE id = $1 AND is_deleted = false
+        LIMIT 1;
+    `;
+
+    const result = await db.query(query, [restaurantId]);
+    return result.rows[0] || null;
+}
+
+/**
  * Get all restaurants owned by a specific user.
  * Used when a restaurant owner logs into the dashboard.
  * 
@@ -268,6 +286,7 @@ async function setRestaurantActiveStatus(restaurantId, isActive) {
 module.exports = {
     registerRestaurant,
     getRestaurantById,
+    getPublicRestaurantById,
     getRestaurantsByOwner,
     updateRestaurant,
     findNearbyRestaurants,

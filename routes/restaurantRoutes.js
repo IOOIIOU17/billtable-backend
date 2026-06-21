@@ -120,7 +120,7 @@ router.get('/:restaurantId', async (req, res) => {
         if (isNaN(restaurantId)) {
             return res.status(400).json({ error: 'Invalid restaurant ID' });
         }
-        const restaurant = await restaurantService.getRestaurantById(restaurantId);
+        const restaurant = await restaurantService.getPublicRestaurantById(restaurantId);
         if (!restaurant) {
             return res.status(404).json({ error: 'Restaurant not found' });
         }
