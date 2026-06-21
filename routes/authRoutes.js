@@ -8,6 +8,7 @@ const { generateSecret, generateQRCodeUrl, verifyToken } = require('../utils/tot
 const QRCode = require('qrcode');
 const { logSecurityEvent } = require('../middleware/securityLogger');
 const { auditLog } = require('../middleware/auditLog');
+const pool = require('../db');
 
 // POST /api/auth/register
 router.post('/register', async (req, res) => {
@@ -195,6 +196,30 @@ router.get('/me', authenticateToken, async (req, res) => {
     return res.status(200).json({ status: 'OK', data: user });
   } catch (error) {
     logger.error({ error: error.message }, 'Get user endpoint error');
+    return res.status(400).json({ status: 'ERROR', message: error.message });
+  }
+});
+
+// POST /api/auth/logout - revoke the current access token so it can no
+// longer be used, even though it has not expired yet (#3 fix).
+router.post('/logout', authenticateToken, async (req, res) => {
+  try {
+    const token = req.token;
+    const decoded = require('../utils/jwt').verifyToken(token, false);
+    const expiresAt = decoded?.exp
+      ? new Date(decoded.exp * 1000)
+      : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+    await pool.query(
+      `INSERT INTO revoked_tokens (token, user_id, expires_at)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (token) DO NOTHING`,
+      [token, req.user.userId, expiresAt]
+    );
+
+    return res.status(200).json({ status: 'OK', message: 'Logged out successfully' });
+  } catch (error) {
+    logger.error({ error: error.message }, 'Logout endpoint error');
     return res.status(400).json({ status: 'ERROR', message: error.message });
   }
 });

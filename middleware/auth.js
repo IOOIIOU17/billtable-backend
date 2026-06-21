@@ -19,6 +19,7 @@
  */
 
 const { verifyToken } = require('../utils/jwt');
+const pool = require('../db');
 
 /**
  * Middleware that requires a valid JWT access token.
@@ -29,7 +30,7 @@ const { verifyToken } = require('../utils/jwt');
  *       console.log(req.user.userId);
  *   });
  */
-function authenticateToken(req, res, next) {
+async function authenticateToken(req, res, next) {
     const authHeader = req.headers['authorization'];
 
     if (!authHeader) {
@@ -60,12 +61,33 @@ function authenticateToken(req, res, next) {
         });
     }
 
+    // Check if this token has been revoked (logout / admin ban)
+    try {
+        const revokedCheck = await pool.query(
+            'SELECT 1 FROM revoked_tokens WHERE token = $1 LIMIT 1',
+            [token]
+        );
+        if (revokedCheck.rows.length > 0) {
+            return res.status(401).json({
+                error: 'Token revoked',
+                message: 'This session has been logged out. Please log in again',
+            });
+        }
+    } catch (error) {
+        // If the revoked-token check itself fails, fail closed (reject)
+        // rather than silently letting a possibly-revoked token through.
+        return res.status(500).json({
+            error: 'Authentication check failed',
+        });
+    }
+
     // Attach decoded info to request for downstream handlers
     req.user = {
         userId: decoded.userId,
         email: decoded.email,
         role: decoded.role,
     };
+    req.token = token;
 
     next();
 }
