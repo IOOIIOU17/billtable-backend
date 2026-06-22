@@ -32,6 +32,7 @@ const settingsRoutes = require('./routes/settingsRoutes');
 const healthRoutes = require('./routes/healthRoutes');
 const addressRoutes = require('./routes/addressRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
+const paymentRoutes = require('./routes/paymentRoutes');
 
 // Backup
 const { runBackup } = require('./utils/backup');
@@ -70,6 +71,7 @@ app.use('/api/settings', settingsRoutes);
 app.use('/api/health', healthRoutes);
 app.use('/api/addresses', addressRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/payments', paymentRoutes);
 
 // ============================================================
 // Health Check Endpoint
