@@ -209,4 +209,47 @@ router.patch('/:orderId/rating', authenticateToken, validateOrderId, async (req,
   }
 });
 
+// POST /api/orders/:orderId/refund (restaurant only)
+router.post('/:orderId/refund', authenticateToken, validateOrderId, async (req, res) => {
+  try {
+    const { refundType, refundPercent } = req.body;
+    if (!['partial', 'full'].includes(refundType)) {
+      return res.status(400).json({ status: 'ERROR', message: 'refundType must be partial or full' });
+    }
+    if (refundType === 'partial' && (typeof refundPercent !== 'number' || refundPercent < 10 || refundPercent > 90)) {
+      return res.status(400).json({ status: 'ERROR', message: 'refundPercent must be between 10 and 90' });
+    }
+
+    const existing = await orderService.getOrderById(req.params.orderId);
+    if (!existing) return res.status(404).json({ status: 'ERROR', message: 'Order not found' });
+
+    const ownerCheck = await pool.query(
+      'SELECT id FROM restaurants WHERE id = $1 AND owner_user_id = $2',
+      [existing.restaurant_id, req.user.userId]
+    );
+    if (req.user.role !== 'admin' && ownerCheck.rows.length === 0) {
+      return res.status(403).json({ status: 'ERROR', message: 'Not authorized' });
+    }
+
+    if (!['delivered', 'accepted', 'preparing'].includes(existing.status)) {
+      return res.status(400).json({ status: 'ERROR', message: 'Cannot refund order in current status' });
+    }
+
+    const percent = refundType === 'full' ? 100 : refundPercent;
+    const newStatus = refundType === 'full' ? 'cancelled' : existing.status;
+    const refundStatus = refundType === 'full' ? 'full' : 'partial';
+
+    await pool.query(
+      'UPDATE orders SET status = $1, refund_percent = $2, refund_status = $3, updated_at = NOW() WHERE id = $4',
+      [newStatus, percent, refundStatus, req.params.orderId]
+    );
+
+    logger.info({ orderId: req.params.orderId, refundType, percent }, 'Refund processed');
+    return res.status(200).json({ status: 'OK', message: `Refund ${refundType} processed`, refundPercent: percent });
+  } catch (error) {
+    logger.error({ error: error.message }, 'Refund error');
+    return res.status(400).json({ status: 'ERROR', message: error.message });
+  }
+});
+
 module.exports = router;
