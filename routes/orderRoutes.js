@@ -135,6 +135,15 @@ router.patch('/:orderId/status', authenticateToken, validateOrderId, async (req,
       return res.status(400).json({ status: 'ERROR', message: 'Status is required' });
     }
 
+    // State machine: บังคับลำดับ transition ที่ถูกต้อง (#4, #76)
+    const VALID_TRANSITIONS = {
+      'pending':    ['accepted', 'cancelled'],
+      'accepted':   ['preparing', 'cancelled'],
+      'preparing':  ['delivered', 'cancelled'],
+      'delivered':  [],
+      'cancelled':  [],
+    };
+
     // --- IDOR protection: เฉพาะ admin หรือร้านที่เป็นเจ้าของ order นี้เท่านั้น ---
     const existing = await orderService.getOrderById(req.params.orderId);
     if (req.user.role !== 'admin') {
@@ -146,6 +155,15 @@ router.patch('/:orderId/status', authenticateToken, validateOrderId, async (req,
         logSecurityEvent('IDOR_BLOCKED', req, { targetOrderId: req.params.orderId, action: 'update_status' });
         return res.status(403).json({ status: 'ERROR', message: 'Not authorized to update this order' });
       }
+    }
+
+    const currentStatus = existing.status;
+    const allowed = VALID_TRANSITIONS[currentStatus];
+    if (!allowed) {
+      return res.status(400).json({ status: 'ERROR', message: `Unknown current status: ${currentStatus}` });
+    }
+    if (!allowed.includes(status)) {
+      return res.status(400).json({ status: 'ERROR', message: `Cannot transition from '${currentStatus}' to '${status}'` });
     }
 
     const order = await orderService.updateOrderStatus(req.params.orderId, status);
