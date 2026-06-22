@@ -150,7 +150,12 @@ router.get('/admin-2fa-setup', async (req, res) => {
 router.post('/admin-login', loginLimiter, async (req, res) => {
   try {
     const { password, totpToken } = req.body;
-    if (password !== process.env.ADMIN_PASSWORD) {
+    const crypto = require('crypto');
+    const supplied = Buffer.from(password || '');
+    const expected = Buffer.from(process.env.ADMIN_PASSWORD || '');
+    const passwordMatch = supplied.length === expected.length &&
+      crypto.timingSafeEqual(supplied, expected);
+    if (!passwordMatch) {
       return res.status(401).json({ status: 'ERROR', message: 'Invalid admin password' });
     }
 
