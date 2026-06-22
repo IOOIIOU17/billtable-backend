@@ -54,4 +54,51 @@ router.post('/create-intent', authenticateToken, async (req, res) => {
   }
 });
 
+// POST /api/payments/webhook
+// Stripe webhook — source of truth สำหรับสถานะการจ่ายเงิน
+// ต้อง parse raw body (ไม่ใช่ JSON) เพื่อ verify signature
+router.post('/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+  const sig = req.headers['stripe-signature'];
+  let event;
+
+  try {
+    event = stripe.webhooks.constructEvent(
+      req.body,
+      sig,
+      process.env.STRIPE_WEBHOOK_SECRET
+    );
+  } catch (err) {
+    logger.error({ error: err.message }, 'Webhook signature verification failed');
+    return res.status(400).json({ error: `Webhook Error: ${err.message}` });
+  }
+
+  try {
+    if (event.type === 'payment_intent.succeeded') {
+      const paymentIntent = event.data.object;
+      const orderId = paymentIntent.metadata?.orderId;
+
+      if (orderId) {
+        await pool.query(
+          `UPDATE orders SET status = 'accepted', updated_at = NOW() WHERE id = $1 AND status = 'pending'`,
+          [orderId]
+        );
+        logger.info({ orderId, paymentIntentId: paymentIntent.id }, 'Payment succeeded — order accepted');
+      }
+    }
+
+    if (event.type === 'payment_intent.payment_failed') {
+      const paymentIntent = event.data.object;
+      const orderId = paymentIntent.metadata?.orderId;
+      if (orderId) {
+        logger.warn({ orderId, paymentIntentId: paymentIntent.id }, 'Payment failed');
+      }
+    }
+
+    return res.status(200).json({ received: true });
+  } catch (error) {
+    logger.error({ error: error.message }, 'Webhook handler error');
+    return res.status(500).json({ error: 'Webhook handler failed' });
+  }
+});
+
 module.exports = router;

@@ -55,7 +55,13 @@ app.use(requestLogger);
 // ============================================================
 // Body Parser
 // ============================================================
-app.use(express.json());
+app.use((req, res, next) => {
+  if (req.originalUrl === '/api/payments/webhook') {
+    next();
+  } else {
+    express.json()(req, res, next);
+  }
+});
 app.use(express.urlencoded({ extended: true }));
 
 // ============================================================
