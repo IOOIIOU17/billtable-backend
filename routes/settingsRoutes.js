@@ -4,7 +4,7 @@ const { authenticateToken, requireRole } = require('../middleware/auth');
 const pool = require('../db');
 
 // GET /api/settings — ดึงค่าทั้งหมด
-router.get('/', authenticateToken, async (req, res) => {
+router.get('/', authenticateToken, requireRole('admin'), async (req, res) => {
   try {
     const result = await pool.query('SELECT key, value FROM platform_settings ORDER BY id');
     const settings = {}
