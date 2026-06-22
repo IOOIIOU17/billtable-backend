@@ -129,7 +129,7 @@ router.post('/restaurant-register', async (req, res) => {
 // GET /api/auth/admin-2fa-setup
 // ใช้ครั้งเดียวตอน setup 2FA — สร้าง secret ใหม่ + แสดง QR code ให้ scan
 // ⚠️ ลบ/ปิด route นี้หลัง setup เสร็จ ป้องกันคนอื่นมาสร้าง secret ใหม่ทับ
-router.get('/admin-2fa-setup', async (req, res) => {
+router.get('/admin-2fa-setup', (req, res, next) => { if (process.env.NODE_ENV === 'production') return res.status(404).json({ status: 'ERROR', message: 'Not found' }); next(); }, async (req, res) => {
   try {
     const secret = generateSecret();
     const otpUrl = generateQRCodeUrl(secret);
