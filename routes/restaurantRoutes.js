@@ -173,7 +173,7 @@ router.patch('/:restaurantId/active-status', authenticateToken, async (req, res)
         if (!existing) {
             return res.status(404).json({ error: 'Restaurant not found' });
         }
-        if (existing.owner_user_id !== userId) {
+        if (req.user.role !== 'admin' && existing.owner_user_id !== userId) {
             return res.status(403).json({ error: 'You do not have permission to change this restaurant' });
         }
 
