@@ -5,8 +5,34 @@ const { logger } = require('../middleware/logger');
 const createOrder = async (userId, restaurantId, items, extra = {}) => {
   try {
     const orderNumber = 'BT-' + Date.now().toString().slice(-6) + Math.random().toString(36).slice(2, 6).toUpperCase();
-    const totalAmount = items.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
     const { theme, guestCount, budget, allergies, avoidSpicy, deliveryTime, deliveryAddress, latitude, longitude, budgetWarningShown, budgetWarningAcknowledged, customerComment } = extra;
+
+    // Verify all menuItemIds exist and belong to this restaurant, then get real prices from DB
+    const menuIds = items.map((item) => item.menuItemId);
+    const menuResult = await pool.query(
+      'SELECT id, name, price FROM menus WHERE id = ANY($1) AND restaurant_id = $2 AND is_available = true',
+      [menuIds, restaurantId]
+    );
+    if (menuResult.rows.length !== items.length) {
+      throw new Error('One or more menu items are invalid or unavailable');
+    }
+    const priceMap = {};
+    for (const row of menuResult.rows) {
+      priceMap[row.id] = { name: row.name, price: parseFloat(row.price) };
+    }
+
+    // Calculate total using DB prices only — never trust client-supplied price
+    const DELIVERY_FEE = 40;
+    const SERVICE_FEE = 40;
+    let foodTotal = 0;
+    const resolvedItems = items.map((item) => {
+      const menu = priceMap[item.menuItemId];
+      const qty = Math.max(1, parseInt(item.quantity) || 1);
+      const lineTotal = menu.price * qty;
+      foodTotal += lineTotal;
+      return { name: menu.name, quantity: qty, unitPrice: menu.price, totalPrice: lineTotal };
+    });
+    const totalAmount = foodTotal + DELIVERY_FEE + SERVICE_FEE;
 
     const result = await pool.query(
       `INSERT INTO orders (user_id, restaurant_id, order_number, total_amount, status, theme, guest_count, budget, allergies, avoid_spicy, delivery_time, delivery_address, latitude, longitude, budget_warning_shown, budget_warning_acknowledged, customer_comment)
@@ -15,10 +41,10 @@ const createOrder = async (userId, restaurantId, items, extra = {}) => {
     );
 
     const orderId = result.rows[0].id;
-    for (const item of items) {
+    for (const item of resolvedItems) {
       await pool.query(
         'INSERT INTO order_items (order_id, item_name, quantity, unit_price, total_price) VALUES ($1, $2, $3, $4, $5)',
-        [orderId, item.name, item.quantity, item.unitPrice, item.unitPrice * item.quantity]
+        [orderId, item.name, item.quantity, item.unitPrice, item.totalPrice]
       );
     }
 
