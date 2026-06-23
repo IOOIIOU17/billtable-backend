@@ -220,4 +220,58 @@ router.post('/onboarding-check', authenticateToken, async (req, res) => {
     }
 });
 
+// POST /api/restaurants/stripe-onboard
+// ร้านอาหารเริ่ม onboarding เพื่อเชื่อมบัญชีธนาคารกับ Stripe Connect
+router.post('/stripe-onboard', authenticateToken, async (req, res) => {
+  try {
+    const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+    const userId = req.user.userId;
+
+    // หาร้านของ user นี้
+    const restaurantResult = await db.query(
+      'SELECT id, name, stripe_account_id FROM restaurants WHERE owner_user_id = $1',
+      [userId]
+    );
+    if (restaurantResult.rows.length === 0) {
+      return res.status(404).json({ status: 'ERROR', message: 'Restaurant not found' });
+    }
+    const restaurant = restaurantResult.rows[0];
+
+    let accountId = restaurant.stripe_account_id;
+
+    // ถ้ายังไม่มี Stripe account ให้สร้างใหม่
+    if (!accountId) {
+      const account = await stripe.accounts.create({
+        type: 'express',
+        country: 'US',
+        capabilities: {
+          card_payments: { requested: true },
+          transfers: { requested: true },
+        },
+        metadata: { restaurantId: restaurant.id.toString() },
+      });
+      accountId = account.id;
+
+      // บันทึก stripe_account_id ลง DB
+      await db.query(
+        'UPDATE restaurants SET stripe_account_id = $1 WHERE id = $2',
+        [accountId, restaurant.id]
+      );
+    }
+
+    // สร้าง onboarding link
+    const accountLink = await stripe.accountLinks.create({
+      account: accountId,
+      refresh_url: `${process.env.FRONTEND_URL || 'https://billtable-restaurant.onrender.com'}/stripe-onboard`,
+      return_url: `${process.env.FRONTEND_URL || 'https://billtable-restaurant.onrender.com'}/orders`,
+      type: 'account_onboarding',
+    });
+
+    return res.status(200).json({ status: 'OK', url: accountLink.url });
+  } catch (error) {
+    console.error('Stripe onboard error:', error);
+    return res.status(400).json({ status: 'ERROR', message: error.message });
+  }
+});
+
 module.exports = router;

@@ -60,6 +60,50 @@ router.post('/create-intent', authenticateToken, async (req, res) => {
   }
 });
 
+// GET /api/payments/restaurant/:restaurantId — ร้านดู payout history
+router.get('/restaurant/:restaurantId', authenticateToken, async (req, res) => {
+  try {
+    const restaurantId = parseInt(req.params.restaurantId, 10);
+    if (isNaN(restaurantId)) return res.status(400).json({ status: 'ERROR', message: 'Invalid restaurant ID' });
+
+    // เช็คว่าเป็นเจ้าของร้านหรือ admin
+    if (req.user.role !== 'admin') {
+      const ownerCheck = await pool.query(
+        'SELECT id FROM restaurants WHERE id = $1 AND owner_user_id = $2',
+        [restaurantId, req.user.userId]
+      );
+      if (ownerCheck.rows.length === 0) {
+        return res.status(403).json({ status: 'ERROR', message: 'Not authorized' });
+      }
+    }
+
+    const result = await pool.query(
+      `SELECT id, order_number, total_amount, status, refund_status, refund_percent,
+              payment_intent_id, created_at, updated_at
+       FROM orders WHERE restaurant_id = $1
+       ORDER BY created_at DESC`,
+      [restaurantId]
+    );
+
+    const commission = 0.10;
+    const delivery = 0.05;
+    const hidden = 0.03;
+    const payoutRate = 1 - commission - delivery - hidden;
+
+    const orders = result.rows.map(o => ({
+      ...o,
+      payout: o.refund_status === 'full' ? 0 :
+              o.refund_status === 'partial' ? parseFloat(o.total_amount) * payoutRate * (1 - (o.refund_percent || 0) / 100) :
+              parseFloat(o.total_amount) * payoutRate,
+    }));
+
+    return res.status(200).json({ status: 'OK', data: orders });
+  } catch (error) {
+    logger.error({ error: error.message }, 'Get restaurant payments error');
+    return res.status(400).json({ status: 'ERROR', message: error.message });
+  }
+});
+
 // POST /api/payments/refund
 router.post('/refund', authenticateToken, async (req, res) => {
   try {
