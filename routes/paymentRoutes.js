@@ -60,6 +60,52 @@ router.post('/create-intent', authenticateToken, async (req, res) => {
   }
 });
 
+// GET /api/payments/admin/summary — Admin ดู Stripe payment summary
+router.get('/admin/summary', authenticateToken, requireRole('admin'), async (req, res) => {
+  try {
+    // ดึง PaymentIntents จาก Stripe
+    const paymentIntents = await stripe.paymentIntents.list({ limit: 100 });
+
+    // ดึง orders จาก DB พร้อม payment_intent_id
+    const ordersResult = await pool.query(
+      `SELECT o.id, o.order_number, o.total_amount, o.status, o.refund_status,
+              o.refund_percent, o.payment_intent_id, o.created_at,
+              u.name as customer_name, r.name as restaurant_name
+       FROM orders o
+       LEFT JOIN users u ON u.id = o.user_id
+       LEFT JOIN restaurants r ON r.id = o.restaurant_id
+       ORDER BY o.created_at DESC LIMIT 100`
+    );
+
+    // Map Stripe data เข้า orders
+    const stripeMap = {};
+    for (const pi of paymentIntents.data) {
+      stripeMap[pi.id] = {
+        stripe_status: pi.status,
+        stripe_amount: pi.amount / 100,
+        stripe_currency: pi.currency,
+      };
+    }
+
+    const orders = ordersResult.rows.map(o => ({
+      ...o,
+      stripe: o.payment_intent_id ? (stripeMap[o.payment_intent_id] || null) : null,
+    }));
+
+    // คำนวณ summary
+    const paid = orders.filter(o => o.stripe?.stripe_status === 'succeeded');
+    const totalRevenue = paid.reduce((s, o) => s + parseFloat(o.total_amount || 0), 0);
+
+    return res.status(200).json({
+      status: 'OK',
+      data: { orders, totalRevenue, paidCount: paid.length }
+    });
+  } catch (error) {
+    logger.error({ error: error.message }, 'Admin Stripe summary error');
+    return res.status(400).json({ status: 'ERROR', message: error.message });
+  }
+});
+
 // GET /api/payments/restaurant/:restaurantId — ร้านดู payout history
 router.get('/restaurant/:restaurantId', authenticateToken, async (req, res) => {
   try {
