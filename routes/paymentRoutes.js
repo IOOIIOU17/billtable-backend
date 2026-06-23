@@ -42,6 +42,12 @@ router.post('/create-intent', authenticateToken, async (req, res) => {
       },
     });
 
+    // บันทึก payment_intent_id ลง DB เพื่อใช้ตอน refund
+    await pool.query(
+      'UPDATE orders SET payment_intent_id = $1 WHERE id = $2',
+      [paymentIntent.id, orderId]
+    );
+
     logger.info({ orderId, amountInCents }, 'PaymentIntent created');
     return res.status(200).json({
       status: 'OK',
@@ -50,6 +56,62 @@ router.post('/create-intent', authenticateToken, async (req, res) => {
     });
   } catch (error) {
     logger.error({ error: error.message }, 'Create payment intent error');
+    return res.status(400).json({ status: 'ERROR', message: error.message });
+  }
+});
+
+// POST /api/payments/refund
+router.post('/refund', authenticateToken, async (req, res) => {
+  try {
+    const { orderId, refundType, refundPercent } = req.body;
+    if (!orderId || !refundType) {
+      return res.status(400).json({ status: 'ERROR', message: 'orderId and refundType are required' });
+    }
+
+    const orderResult = await pool.query(
+      'SELECT id, total_amount, status, restaurant_id, payment_intent_id FROM orders WHERE id = $1',
+      [orderId]
+    );
+    if (orderResult.rows.length === 0) {
+      return res.status(404).json({ status: 'ERROR', message: 'Order not found' });
+    }
+    const order = orderResult.rows[0];
+
+    // เฉพาะร้านที่เป็นเจ้าของ order หรือ admin
+    if (req.user.role !== 'admin') {
+      const ownerCheck = await pool.query(
+        'SELECT id FROM restaurants WHERE id = $1 AND owner_user_id = $2',
+        [order.restaurant_id, req.user.userId]
+      );
+      if (ownerCheck.rows.length === 0) {
+        return res.status(403).json({ status: 'ERROR', message: 'Not authorized' });
+      }
+    }
+
+    const percent = refundType === 'full' ? 100 : (refundPercent || 50);
+    const totalAmount = parseFloat(order.total_amount);
+    const refundAmountCents = Math.round((totalAmount * percent / 100) * 100);
+
+    // ถ้ามี payment_intent_id เรียก Stripe Refund จริง
+    let stripeRefundId = null;
+    if (order.payment_intent_id) {
+      const refund = await stripe.refunds.create({
+        payment_intent: order.payment_intent_id,
+        amount: refundAmountCents,
+      });
+      stripeRefundId = refund.id;
+    }
+
+    const newStatus = refundType === 'full' ? 'cancelled' : order.status;
+    await pool.query(
+      'UPDATE orders SET status = $1, refund_percent = $2, refund_status = $3, updated_at = NOW() WHERE id = $4',
+      [newStatus, percent, refundType === 'full' ? 'full' : 'partial', orderId]
+    );
+
+    logger.info({ orderId, percent, stripeRefundId }, 'Refund processed');
+    return res.status(200).json({ status: 'OK', message: 'Refund processed', refundPercent: percent, stripeRefundId });
+  } catch (error) {
+    logger.error({ error: error.message }, 'Refund error');
     return res.status(400).json({ status: 'ERROR', message: error.message });
   }
 });
