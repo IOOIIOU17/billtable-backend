@@ -25,13 +25,13 @@ function guestPhrase(guestCount) {
 
 function eventMessage(theme) {
   const templates = {
-    Birthday: "Here's to the theme you picked — we hope this birthday is full of laughter and smiles. Don't forget to wish the birthday person well for us!",
-    Wedding: "Here's to the theme you picked — we hope this wedding is filled with love and joy, surrounded by close friends and family. Please send our congratulations to the happy couple!",
-    'Game Day @ Home': "Here's to the theme you picked — we hope game day at home is full of fun and loud cheering. Root for your team like you mean it!",
-    'Game Day @ Office': "Here's to the theme you picked — we hope game day brings the office closer together. Cheer loud and enjoy it as a team!",
-    Graduation: "Here's to the theme you picked — we hope graduation day feels as proud as all the hard work that led here. Please pass along our congratulations to the graduate!",
-    'My Party': "Here's to the theme you picked — we hope this party turns out exactly the way you imagined. Have an amazing time!",
-    Other: "Here's to the theme you picked — we hope it becomes a great memory for everyone who's there.",
+    Birthday: "We hope this birthday is filled with laughter, smiles, and memories that last. Please wish the birthday person a wonderful day from all of us at BillTable.",
+    Wedding: "We hope this wedding day is everything you dreamed of — surrounded by love, family, and the people who matter most. Please pass along our warmest congratulations to the happy couple.",
+    'Game Day @ Home': "We hope game day at home is loud, fun, and full of great moments. Cheer your team on like only you can.",
+    'Game Day @ Office': "We hope game day brings your team closer together. Cheer loud, enjoy the food, and make it a day the office remembers.",
+    Graduation: "We hope graduation day feels as proud and meaningful as every step that led here. Please pass along our congratulations — this one was earned.",
+    'My Party': "We hope this party turns out exactly the way you imagined — and maybe even better. Enjoy every moment of it.",
+    Other: "We hope this occasion becomes a wonderful memory for everyone who shares it with you.",
   };
 
   return templates[theme] || templates.Other;
@@ -39,13 +39,13 @@ function eventMessage(theme) {
 
 function cuisineMessage(theme) {
   const templates = {
-    Thai: "Here's to the theme you picked — we hope these bold Thai flavors make this meal one you'll want again.",
-    Sushi: "Here's to the theme you picked — we hope this turns out to be a meal worth remembering.",
-    Italian: "Here's to the theme you picked — we hope this Italian meal feels as warm as sitting down for dinner in Italy.",
-    Custom: "Here's to the theme you picked — we hope this custom menu is exactly what you were going for.",
+    Thai: "We hope these bold Thai flavors make this a meal worth coming back for.",
+    Sushi: "We hope this meal turns out to be one of those ones you remember for a long time.",
+    Italian: "We hope this Italian spread feels as warm and comforting as a real dinner in Italy.",
+    Custom: "We hope this menu is exactly what you had in mind — made just the way you wanted it.",
   };
 
-  return templates[theme] || "Here's to the theme you picked — we hope it turns out to be a delicious, memorable meal.";
+  return templates[theme] || "We hope this meal turns out to be delicious and worth remembering.";
 }
 
 /**
@@ -56,7 +56,7 @@ function cuisineMessage(theme) {
  */
 function generateClosingMessage(theme, guestCount) {
   if (!theme) {
-    return 'Your table is ready — we hope it turns out to be a great meal.';
+    return 'Your table is ready. We hope this meal brings everyone together.';
   }
 
   if (EVENT_THEMES.has(theme)) {
@@ -68,7 +68,7 @@ function generateClosingMessage(theme, guestCount) {
   }
 
   // Unknown/custom-typed theme value — generic fallback
-  return "Here's to the theme you picked — we hope it becomes a great memory for this occasion.";
+  return "We hope this occasion becomes a great memory — for you and everyone who's part of it.";
 }
 
 module.exports = { generateClosingMessage };
