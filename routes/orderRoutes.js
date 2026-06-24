@@ -6,6 +6,7 @@ const { authenticateToken, requireRole } = require('../middleware/auth');
 const { logger } = require('../middleware/logger');
 const pool = require('../db');
 const { createOrderLimiter, generalLimiter } = require('../middleware/rateLimit');
+const { sendOrderNotificationToRestaurant, sendOrderConfirmationToCustomer } = require('../services/emailService');
 const { logSecurityEvent } = require('../middleware/securityLogger');
 
 // ตรวจสอบว่า orderId เป็นตัวเลขก่อนส่งเข้า database
@@ -26,6 +27,35 @@ router.post('/', authenticateToken, createOrderLimiter, async (req, res) => {
       return res.status(400).json({ status: 'ERROR', message: 'Restaurant ID and items are required' });
     }
     const order = await orderService.createOrder(req.user.userId, restaurantId, items, { theme, guestCount, budget, allergies, avoidSpicy, deliveryTime, deliveryAddress, latitude, longitude });
+
+    // ดึงข้อมูลร้านและลูกค้าเพื่อส่ง email
+    const restaurantResult = await pool.query('SELECT name, email FROM restaurants WHERE id = $1', [restaurantId]);
+    const userResult = await pool.query('SELECT name, email FROM users WHERE id = $1', [req.user.userId]);
+    const orderItemsResult = await pool.query('SELECT item_name, quantity FROM order_items WHERE order_id = $1', [order.id]);
+    const restaurant = restaurantResult.rows[0];
+    const user = userResult.rows[0];
+
+    // ส่ง email แจ้งร้าน
+    if (restaurant?.email) {
+      sendOrderNotificationToRestaurant({
+        restaurantEmail: restaurant.email,
+        restaurantName: restaurant.name,
+        orderNumber: order.order_number,
+        theme, guestCount, deliveryTime, deliveryAddress,
+        items: orderItemsResult.rows,
+      }).catch(() => {});
+    }
+
+    // ส่ง email ยืนยันลูกค้า
+    if (user?.email) {
+      sendOrderConfirmationToCustomer({
+        customerEmail: user.email,
+        customerName: user.name,
+        orderNumber: order.order_number,
+        restaurantName: restaurant?.name,
+        theme, deliveryTime,
+      }).catch(() => {});
+    }
     return res.status(201).json({ status: 'OK', message: 'Order created successfully', data: order });
   } catch (error) {
     logger.error({ error: error.message }, 'Create order endpoint error');
