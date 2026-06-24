@@ -42,7 +42,7 @@ const app = express();
 
 // Trust Render's reverse proxy so req.ip = real client IP
 // (จำเป็นมาก สำหรับ rate limiter ให้แยกตามคนจริง ไม่ใช่รวมทุกคนเป็น IP เดียว)
-app.set('trust proxy', true);
+app.set('trust proxy', 1);
 
 // ============================================================
 // Security & Logging Middleware
