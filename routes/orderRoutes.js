@@ -39,7 +39,7 @@ router.get('/all', authenticateToken, requireRole('admin'), generalLimiter, asyn
   try {
     const result = await pool.query(
       `SELECT o.*, u.name as customer_name, u.email as customer_email,
-       r.name as restaurant_name
+       r.name as restaurant_name, r.phone as restaurant_phone
        FROM orders o
        LEFT JOIN users u ON o.user_id = u.id
        LEFT JOIN restaurants r ON o.restaurant_id = r.id
