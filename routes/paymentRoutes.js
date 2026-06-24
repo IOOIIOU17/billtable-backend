@@ -14,7 +14,11 @@ router.post('/create-intent', authenticateToken, async (req, res) => {
 
     // ดึง order จาก DB เพื่อเอา total_amount จริง (ไม่เชื่อ client)
     const orderResult = await pool.query(
-      'SELECT id, total_amount, status, user_id, order_number FROM orders WHERE id = $1',
+      `SELECT o.id, o.total_amount, o.status, o.user_id, o.order_number,
+              r.stripe_account_id
+       FROM orders o
+       JOIN restaurants r ON r.id = o.restaurant_id
+       WHERE o.id = $1`,
       [orderId]
     );
     if (orderResult.rows.length === 0) return res.status(404).json({ status: 'ERROR', message: 'Order not found' });
@@ -32,7 +36,10 @@ router.post('/create-intent', authenticateToken, async (req, res) => {
 
     // สร้าง PaymentIntent (amount เป็น cents)
     const amountInCents = Math.round(parseFloat(order.total_amount) * 100);
-    const paymentIntent = await stripe.paymentIntents.create({
+    const commissionRate = 0.10;
+    const applicationFeeAmount = Math.round(amountInCents * commissionRate);
+
+    const paymentIntentParams = {
       amount: amountInCents,
       currency: 'usd',
       metadata: {
@@ -40,7 +47,17 @@ router.post('/create-intent', authenticateToken, async (req, res) => {
         orderNumber: order.order_number,
         userId: order.user_id.toString(),
       },
-    });
+    };
+
+    // ถ้าร้านมี stripe_account_id ให้ใช้ destination charge
+    if (order.stripe_account_id) {
+      paymentIntentParams.application_fee_amount = applicationFeeAmount;
+      paymentIntentParams.transfer_data = {
+        destination: order.stripe_account_id,
+      };
+    }
+
+    const paymentIntent = await stripe.paymentIntents.create(paymentIntentParams);
 
     // บันทึก payment_intent_id ลง DB เพื่อใช้ตอน refund
     await pool.query(
