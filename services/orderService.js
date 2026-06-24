@@ -72,7 +72,7 @@ const getOrderById = async (orderId) => {
 // Get User Orders
 const getUserOrders = async (userId) => {
   try {
-    const result = await pool.query('SELECT * FROM orders WHERE user_id = $1 ORDER BY created_at DESC', [userId]);
+    const result = await pool.query(`SELECT o.*, r.name as restaurant_name, r.phone as restaurant_phone FROM orders o LEFT JOIN restaurants r ON o.restaurant_id = r.id WHERE o.user_id = $1 ORDER BY o.created_at DESC`, [userId]);
     const orders = result.rows;
 
     // ดึง order_items ของทุก order ในครั้งเดียว (แก้ N+1)
