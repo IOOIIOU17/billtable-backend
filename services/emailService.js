@@ -79,10 +79,10 @@ async function sendPasswordResetEmail({ toEmail, toName, resetLink }) {
     to: toEmail,
     subject: `Reset your BillTable password`,
     html: `
-      <div style="font-family:'Georgia',serif;max-width:480px;margin:0 auto;padding:40px 24px;color:#1A1A1A;">
-        <h2 style="font-size:28px;margin-bottom:4px;">BillTable</h2>
-        <p style="color:#4A4A4A;font-size:13px;margin-bottom:32px;">Reset your password</p>
-        <p style="font-size:16px;">Hi ${toName || 'there'},</p>
+      <div style="font-family:'Brush Script MT','Segoe Script','Comic Sans MS',cursive;max-width:480px;margin:0 auto;padding:40px 24px;color:#1A1A1A;">
+        <h2 style="font-size:36px;margin-bottom:4px;font-weight:normal;">BillTable</h2>
+        <p style="color:#4A4A4A;font-size:14px;margin-bottom:32px;">Reset your password</p>
+        <p style="font-size:18px;">Hi ${toName || 'there'},</p>
         <p style="font-size:15px;color:#4A4A4A;">We received a request to reset your BillTable password.</p>
         <div style="margin:32px 0;">
           <a href="${resetLink}" style="display:inline-block;background:#1A1A1A;color:#ffffff;padding:14px 32px;border-radius:12px;text-decoration:none;font-size:16px;font-weight:bold;">Reset my password →</a>
