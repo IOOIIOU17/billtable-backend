@@ -78,19 +78,21 @@ async function sendPasswordResetEmail({ toEmail, toName, resetLink }) {
     from: `"BillTable" <${process.env.GMAIL_USER}>`,
     to: toEmail,
     subject: `Reset your BillTable password`,
-    text: `
-Hi ${toName || 'there'},
-
-We received a request to reset your BillTable password.
-
-Click the link below to set a new password (expires in 1 hour):
-${resetLink}
-
-If you didn't request this, you can safely ignore this email.
-
-Table first. Food follows.
-— BillTable
-    `.trim(),
+    html: `
+      <div style="font-family:'Georgia',serif;max-width:480px;margin:0 auto;padding:40px 24px;color:#1A1A1A;">
+        <h2 style="font-size:28px;margin-bottom:4px;">BillTable</h2>
+        <p style="color:#4A4A4A;font-size:13px;margin-bottom:32px;">Reset your password</p>
+        <p style="font-size:16px;">Hi ${toName || 'there'},</p>
+        <p style="font-size:15px;color:#4A4A4A;">We received a request to reset your BillTable password.</p>
+        <div style="margin:32px 0;">
+          <a href="${resetLink}" style="display:inline-block;background:#1A1A1A;color:#ffffff;padding:14px 32px;border-radius:12px;text-decoration:none;font-size:16px;font-weight:bold;">Reset my password →</a>
+        </div>
+        <p style="font-size:13px;color:#999;">Link expires in 1 hour. If you didn't request this, you can safely ignore this email.</p>
+        <hr style="border:none;border-top:1px solid #E8E8E8;margin:32px 0;" />
+        <p style="font-size:13px;color:#4A4A4A;font-style:italic;">Those who give their best often receive the best in return.</p>
+        <p style="font-size:13px;color:#4A4A4A;">— BillTable</p>
+      </div>
+    `,
   });
 }
 
