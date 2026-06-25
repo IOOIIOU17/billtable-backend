@@ -35,7 +35,6 @@ INVOICE SUMMARY
 ─────────────────────────────
 Subtotal (food):       ${fmt(subtotal)}
 Platform fee (10%):   -${fmt(platformFee)}
-Delivery fee (5%):    -${fmt(deliveryFeeAmount)}
 ─────────────────────────────
 Your payout:           ${fmt(restaurantPayout)}
 ─────────────────────────────
