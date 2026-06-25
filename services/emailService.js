@@ -79,8 +79,8 @@ async function sendPasswordResetEmail({ toEmail, toName, resetLink }) {
     to: toEmail,
     subject: `Reset your BillTable password`,
     html: `
-      <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;max-width:480px;margin:0 auto;padding:40px 24px;color:#1A1A1A;">
-        <h2 style="font-size:28px;margin-bottom:4px;font-weight:bold;letter-spacing:-0.5px;">BillTable</h2>
+      <div style="font-family:Georgia,'Times New Roman',serif;max-width:480px;margin:0 auto;padding:40px 24px;color:#1A1A1A;">
+        <h2 style="font-size:28px;margin-bottom:4px;font-weight:bold;">BillTable</h2>
         <p style="color:#4A4A4A;font-size:13px;margin-bottom:32px;">Reset your password</p>
         <p style="font-size:16px;">Hi ${toName || 'there'},</p>
         <p style="font-size:15px;color:#4A4A4A;">We received a request to reset your BillTable password.</p>
