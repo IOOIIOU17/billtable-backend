@@ -24,6 +24,10 @@ const createOrder = async (userId, restaurantId, items, extra = {}) => {
     // Calculate total using DB prices only — never trust client-supplied price
     const DELIVERY_FEE = 40;
     const SERVICE_FEE = 40;
+    const TAX_RATE = extra.taxRate || 0.0875; // Default 8.75% (CA) — overridable per ZIP later
+    const PLATFORM_FEE_RATE = 0.10; // 10% platform commission
+    const DELIVERY_FEE_RATE = 0.05; // 5% delivery fee (charged to restaurant)
+
     let foodTotal = 0;
     const resolvedItems = items.map((item) => {
       const menu = priceMap[item.menuItemId];
@@ -32,12 +36,19 @@ const createOrder = async (userId, restaurantId, items, extra = {}) => {
       foodTotal += lineTotal;
       return { name: menu.name, quantity: qty, unitPrice: menu.price, totalPrice: lineTotal };
     });
-    const totalAmount = foodTotal + DELIVERY_FEE + SERVICE_FEE;
+
+    // Tax & fee breakdown
+    const subtotal = parseFloat(foodTotal.toFixed(2));
+    const taxAmount = parseFloat((subtotal * TAX_RATE).toFixed(2));
+    const platformFee = parseFloat((subtotal * PLATFORM_FEE_RATE).toFixed(2));
+    const deliveryFeeAmount = parseFloat((subtotal * DELIVERY_FEE_RATE).toFixed(2));
+    const restaurantPayout = parseFloat((subtotal - platformFee - deliveryFeeAmount).toFixed(2));
+    const totalAmount = parseFloat((subtotal + taxAmount + DELIVERY_FEE + SERVICE_FEE).toFixed(2));
 
     const result = await pool.query(
-      `INSERT INTO orders (user_id, restaurant_id, order_number, total_amount, status, theme, guest_count, budget, allergies, avoid_spicy, delivery_time, delivery_address, latitude, longitude, budget_warning_shown, budget_warning_acknowledged, customer_comment)
-       VALUES ($1, $2, $3, $4, 'pending', $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) RETURNING *`,
-      [userId, restaurantId, orderNumber, totalAmount, theme, guestCount, budget, allergies, avoidSpicy, deliveryTime, deliveryAddress, latitude, longitude, budgetWarningShown || false, budgetWarningAcknowledged || false, customerComment || null]
+      `INSERT INTO orders (user_id, restaurant_id, order_number, total_amount, status, theme, guest_count, budget, allergies, avoid_spicy, delivery_time, delivery_address, latitude, longitude, budget_warning_shown, budget_warning_acknowledged, customer_comment, subtotal, tax_rate, tax_amount, platform_fee, delivery_fee_amount, restaurant_payout)
+       VALUES ($1, $2, $3, $4, 'pending', $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22) RETURNING *`,
+      [userId, restaurantId, orderNumber, totalAmount, theme, guestCount, budget, allergies, avoidSpicy, deliveryTime, deliveryAddress, latitude, longitude, budgetWarningShown || false, budgetWarningAcknowledged || false, customerComment || null, subtotal, TAX_RATE, taxAmount, platformFee, deliveryFeeAmount, restaurantPayout]
     );
 
     const orderId = result.rows[0].id;

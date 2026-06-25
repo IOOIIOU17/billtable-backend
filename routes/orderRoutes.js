@@ -43,6 +43,12 @@ router.post('/', authenticateToken, createOrderLimiter, async (req, res) => {
         orderNumber: order.order_number,
         theme, guestCount, deliveryTime, deliveryAddress,
         items: orderItemsResult.rows,
+        subtotal: order.subtotal,
+        platformFee: order.platform_fee,
+        deliveryFeeAmount: order.delivery_fee_amount,
+        restaurantPayout: order.restaurant_payout,
+        taxAmount: order.tax_amount,
+        taxRate: order.tax_rate,
       }).catch(() => {});
     }
 

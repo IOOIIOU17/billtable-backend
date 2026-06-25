@@ -8,8 +8,11 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-async function sendOrderNotificationToRestaurant({ restaurantEmail, restaurantName, orderNumber, theme, guestCount, deliveryTime, deliveryAddress, items }) {
-  const itemList = (items || []).map(i => `• ${i.item_name} x${i.quantity}`).join('\n');
+async function sendOrderNotificationToRestaurant({ restaurantEmail, restaurantName, orderNumber, theme, guestCount, deliveryTime, deliveryAddress, items, subtotal, platformFee, deliveryFeeAmount, restaurantPayout, taxAmount, taxRate }) {
+  const itemList = (items || []).map(i => `• ${i.item_name} x${i.quantity}  $${parseFloat(i.total_price || 0).toFixed(2)}`).join('\n');
+
+  const fmt = (n) => `$${parseFloat(n || 0).toFixed(2)}`;
+  const taxPct = taxRate ? `${(parseFloat(taxRate) * 100).toFixed(2)}%` : '8.75%';
 
   await transporter.sendMail({
     from: `"BillTable" <${process.env.GMAIL_USER}>`,
@@ -26,6 +29,19 @@ Address: ${deliveryAddress || '-'}
 
 Items:
 ${itemList}
+
+─────────────────────────────
+INVOICE SUMMARY
+─────────────────────────────
+Subtotal (food):       ${fmt(subtotal)}
+Platform fee (10%):   -${fmt(platformFee)}
+Delivery fee (5%):    -${fmt(deliveryFeeAmount)}
+─────────────────────────────
+Your payout:           ${fmt(restaurantPayout)}
+─────────────────────────────
+Tax collected (${taxPct}):  ${fmt(taxAmount)}
+(BillTable remits tax to CDTFA — not deducted from your payout)
+─────────────────────────────
 
 Please log in to accept this order:
 https://restaurant.billtable.co
