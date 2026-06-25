@@ -73,4 +73,25 @@ Table first. Food follows.
   });
 }
 
-module.exports = { sendOrderNotificationToRestaurant, sendOrderConfirmationToCustomer };
+async function sendPasswordResetEmail({ toEmail, toName, resetLink }) {
+  await transporter.sendMail({
+    from: `"BillTable" <${process.env.GMAIL_USER}>`,
+    to: toEmail,
+    subject: `Reset your BillTable password`,
+    text: `
+Hi ${toName || 'there'},
+
+We received a request to reset your BillTable password.
+
+Click the link below to set a new password (expires in 1 hour):
+${resetLink}
+
+If you didn't request this, you can safely ignore this email.
+
+Table first. Food follows.
+— BillTable
+    `.trim(),
+  });
+}
+
+module.exports = { sendOrderNotificationToRestaurant, sendOrderConfirmationToCustomer, sendPasswordResetEmail };

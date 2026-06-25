@@ -229,4 +229,73 @@ router.post('/logout', authenticateToken, async (req, res) => {
   }
 });
 
+// POST /api/auth/forgot-password
+router.post('/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ status: 'ERROR', message: 'Email is required' });
+
+    const userResult = await pool.query('SELECT id, name FROM users WHERE email = $1', [email]);
+    // ไม่บอกว่า email มีหรือไม่มี (security best practice)
+    if (userResult.rows.length === 0) {
+      return res.status(200).json({ status: 'OK', message: 'If this email exists, a reset link has been sent.' });
+    }
+
+    const user = userResult.rows[0];
+    const crypto = require('crypto');
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+    // ลบ token เก่า แล้วสร้างใหม่
+    await pool.query('DELETE FROM password_reset_tokens WHERE user_id = $1', [user.id]);
+    await pool.query(
+      'INSERT INTO password_reset_tokens (user_id, token, expires_at) VALUES ($1, $2, $3)',
+      [user.id, token, expiresAt]
+    );
+
+    const resetLink = `https://billtable.co/reset-password?token=${token}`;
+    const { sendPasswordResetEmail } = require('../services/emailService');
+    await sendPasswordResetEmail({ toEmail: email, toName: user.name, resetLink });
+
+    return res.status(200).json({ status: 'OK', message: 'If this email exists, a reset link has been sent.' });
+  } catch (error) {
+    logger.error({ error: error.message }, 'Forgot password error');
+    return res.status(500).json({ status: 'ERROR', message: 'Something went wrong' });
+  }
+});
+
+// POST /api/auth/reset-password
+router.post('/reset-password', async (req, res) => {
+  try {
+    const { token, newPassword } = req.body;
+    if (!token || !newPassword) {
+      return res.status(400).json({ status: 'ERROR', message: 'Token and new password are required' });
+    }
+    if (newPassword.length < 8) {
+      return res.status(400).json({ status: 'ERROR', message: 'Password must be at least 8 characters' });
+    }
+
+    const tokenResult = await pool.query(
+      'SELECT * FROM password_reset_tokens WHERE token = $1 AND used = FALSE AND expires_at > NOW()',
+      [token]
+    );
+    if (tokenResult.rows.length === 0) {
+      return res.status(400).json({ status: 'ERROR', message: 'Invalid or expired reset link' });
+    }
+
+    const resetToken = tokenResult.rows[0];
+    const bcrypt = require('bcrypt');
+    const hashedPassword = await bcrypt.hash(newPassword, 12);
+
+    await pool.query('UPDATE users SET password = $1, updated_at = NOW() WHERE id = $2', [hashedPassword, resetToken.user_id]);
+    await pool.query('UPDATE password_reset_tokens SET used = TRUE WHERE id = $1', [resetToken.id]);
+
+    logger.info({ userId: resetToken.user_id }, 'Password reset successful');
+    return res.status(200).json({ status: 'OK', message: 'Password reset successfully. Please log in.' });
+  } catch (error) {
+    logger.error({ error: error.message }, 'Reset password error');
+    return res.status(500).json({ status: 'ERROR', message: 'Something went wrong' });
+  }
+});
+
 module.exports = router;
