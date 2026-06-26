@@ -75,7 +75,7 @@ router.get('/mine', authenticateToken, async (req, res) => {
     }
 });
 
-router.get('/nearby', async (req, res) => {
+router.get('/nearby', authenticateToken, async (req, res) => {
     try {
         const customerLatitude = parseFloat(req.query.latitude);
         const customerLongitude = parseFloat(req.query.longitude);
@@ -114,7 +114,7 @@ router.get('/all', authenticateToken, requireRole('admin'), async (req, res) => 
   }
 });
 
-router.get('/:restaurantId', async (req, res) => {
+router.get('/:restaurantId', authenticateToken, async (req, res) => {
     try {
         const restaurantId = parseInt(req.params.restaurantId, 10);
         if (isNaN(restaurantId)) {
