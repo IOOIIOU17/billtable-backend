@@ -38,6 +38,19 @@ const paymentRoutes = require('./routes/paymentRoutes');
 const { runBackup } = require('./utils/backup');
 setInterval(runBackup, 24 * 60 * 60 * 1000);
 
+// ============================================================
+// Traffic Monitor State (Real-time)
+// ============================================================
+const trafficState = {
+  concurrent: 0,
+  requestsLastMinute: [],
+  threshold: 30,
+  limitEnabled: false,
+};
+
+// Export ให้ healthRoutes ดึงไปใช้
+global.trafficState = trafficState;
+
 const app = express();
 
 // Trust Render's reverse proxy so req.ip = real client IP
@@ -48,6 +61,34 @@ app.set('trust proxy', 1);
 // Security & Logging Middleware
 // ============================================================
 app.use(helmetMiddleware);
+
+// ============================================================
+// Traffic Counter Middleware
+// ============================================================
+app.use((req, res, next) => {
+  // ถ้า Limiter เปิดอยู่ และ concurrent เกิน threshold → block
+  if (trafficState.limitEnabled && trafficState.concurrent >= trafficState.threshold) {
+    return res.status(503).json({
+      status: 'ERROR',
+      message: 'System is currently at capacity. Please try again shortly.',
+    });
+  }
+
+  trafficState.concurrent++;
+  const now = Date.now();
+  trafficState.requestsLastMinute.push(now);
+
+  // เคลียร์ request ที่เก่ากว่า 1 นาที
+  trafficState.requestsLastMinute = trafficState.requestsLastMinute.filter(
+    t => now - t < 60 * 1000
+  );
+
+  res.on('finish', () => {
+    trafficState.concurrent = Math.max(0, trafficState.concurrent - 1);
+  });
+
+  next();
+});
 app.use(corsMiddleware);
 app.use(limiter);
 app.use(requestLogger);

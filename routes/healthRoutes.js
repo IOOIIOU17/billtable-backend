@@ -24,4 +24,35 @@ router.get('/', async (req, res) => {
   }
 });
 
+// GET /api/health/traffic — Real-time traffic monitor (Admin only)
+router.get('/traffic', (req, res) => {
+  const state = global.trafficState;
+  if (!state) {
+    return res.status(503).json({ status: 'ERROR', message: 'Traffic monitor not initialized' });
+  }
+  return res.status(200).json({
+    concurrent: state.concurrent,
+    requestsPerMin: state.requestsLastMinute.length,
+    threshold: state.threshold,
+    isOverLimit: state.concurrent >= state.threshold,
+    limitEnabled: state.limitEnabled,
+  });
+});
+
+// POST /api/health/traffic/limit — Enable/Disable limiter (Admin only)
+router.post('/traffic/limit', (req, res) => {
+  const state = global.trafficState;
+  if (!state) {
+    return res.status(503).json({ status: 'ERROR', message: 'Traffic monitor not initialized' });
+  }
+  const { enabled, threshold } = req.body;
+  if (typeof enabled === 'boolean') state.limitEnabled = enabled;
+  if (typeof threshold === 'number' && threshold > 0) state.threshold = threshold;
+  return res.status(200).json({
+    limitEnabled: state.limitEnabled,
+    threshold: state.threshold,
+    message: state.limitEnabled ? 'Limiter ON — new requests will be blocked when over threshold' : 'Limiter OFF',
+  });
+});
+
 module.exports = router;
