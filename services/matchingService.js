@@ -116,7 +116,10 @@ async function findMatches(requirements) {
       parseFloat(r.latitude), parseFloat(r.longitude)
     );
 
-    const radius = r.delivery_radius_miles || 10;
+    // TEMP (testing only): ถ้า radius < 4 ไมล์ หรือไม่มีค่า → ใช้ 100 ไมล์ชั่วคราว
+    // TODO: เปลี่ยนกลับเป็น (r.delivery_radius_miles || 10) หลังมีร้านจริงเข้าระบบแล้ว
+    const originalRadius = r.delivery_radius_miles || 10;
+    const radius = originalRadius < 4 ? 100 : originalRadius;
     if (distance <= radius) {
       nearbyRestaurants.push({ ...r, distance });
     }
