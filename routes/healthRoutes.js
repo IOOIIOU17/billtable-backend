@@ -1,6 +1,10 @@
 const express = require('express');
-const router = express.Router();
+const router = require('express').Router();
 const pool = require('../db');
+const { sendTrafficAlert } = require('../services/emailService');
+
+const alertCooldown = { 70: 0, 90: 0 };
+const COOLDOWN_MS = 10 * 60 * 1000;
 
 // GET /api/health
 router.get('/', async (req, res) => {
@@ -30,6 +34,17 @@ router.get('/traffic', (req, res) => {
   if (!state) {
     return res.status(503).json({ status: 'ERROR', message: 'Traffic monitor not initialized' });
   }
+
+  const matchingPct = Math.round(((state.matchingConcurrent || 0) / (state.matchingThreshold || 49)) * 100);
+  const now = Date.now();
+  if (matchingPct >= 90 && now - alertCooldown[90] > COOLDOWN_MS) {
+    alertCooldown[90] = now;
+    sendTrafficAlert({ concurrent: state.matchingConcurrent, threshold: state.matchingThreshold, pct: matchingPct }).catch(() => {});
+  } else if (matchingPct >= 70 && now - alertCooldown[70] > COOLDOWN_MS) {
+    alertCooldown[70] = now;
+    sendTrafficAlert({ concurrent: state.matchingConcurrent, threshold: state.matchingThreshold, pct: matchingPct }).catch(() => {});
+  }
+
   return res.status(200).json({
     concurrent: state.concurrent,
     requestsPerMin: state.requestsLastMinute.length,

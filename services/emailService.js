@@ -95,4 +95,27 @@ async function sendPasswordResetEmail({ toEmail, toName, resetLink }) {
   });
 }
 
-module.exports = { sendOrderNotificationToRestaurant, sendOrderConfirmationToCustomer, sendPasswordResetEmail };
+async function sendTrafficAlert({ concurrent, threshold, pct }) {
+  await transporter.sendMail({
+    from: `"BillTable System" <${process.env.GMAIL_USER}>`,
+    to: process.env.GMAIL_USER,
+    subject: `BillTable Traffic Alert — ${pct}% Capacity`,
+    text: `
+BillTable Traffic Alert
+─────────────────────────────
+Time: ${new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' })}
+
+Matching Requests: ${concurrent} / ${threshold} concurrent
+Capacity Used: ${pct}%
+
+${pct >= 90 ? 'DANGER — System at capacity. Enable Limiter immediately.' : 'WARNING — High traffic detected. Monitor closely.'}
+
+Open Admin Dashboard:
+https://admin.billtable.co
+─────────────────────────────
+BillTable Auto Alert System
+    `.trim(),
+  });
+}
+
+module.exports = { sendOrderNotificationToRestaurant, sendOrderConfirmationToCustomer, sendPasswordResetEmail, sendTrafficAlert };
