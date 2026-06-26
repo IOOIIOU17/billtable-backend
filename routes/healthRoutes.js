@@ -7,25 +7,13 @@ const { authenticateToken, requireRole } = require('../middleware/auth');
 const alertCooldown = { 70: 0, 90: 0 };
 const COOLDOWN_MS = 10 * 60 * 1000;
 
-// GET /api/health
+// GET /api/health — public minimal (ไม่เปิด infra details)
 router.get('/', async (req, res) => {
-  const start = Date.now();
   try {
     await pool.query('SELECT 1');
-    const dbMs = Date.now() - start;
-    return res.status(200).json({
-      status: 'OK',
-      timestamp: new Date().toISOString(),
-      uptime_seconds: Math.floor(process.uptime()),
-      database: { status: 'connected', response_ms: dbMs },
-      memory_mb: Math.round(process.memoryUsage().rss / 1024 / 1024)
-    });
+    return res.status(200).json({ status: 'OK' });
   } catch (error) {
-    return res.status(500).json({
-      status: 'ERROR',
-      timestamp: new Date().toISOString(),
-      database: { status: 'disconnected', error: error.message }
-    });
+    return res.status(500).json({ status: 'ERROR' });
   }
 });
 
