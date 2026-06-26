@@ -1,4 +1,5 @@
 const express = require('express');
+const { generalLimiter } = require('../middleware/rateLimit');
 const uploadToCloudinary = require('../middleware/cloudinaryUpload');
 const router = express.Router();
 const menuService = require('../services/menuService');
@@ -22,7 +23,7 @@ async function verifyRestaurantOwnership(restaurantId, userId) {
 }
 
 // POST /api/menus
-router.post('/', authenticateToken, upload.single('image'), async (req, res) => {
+router.post('/', authenticateToken, generalLimiter, upload.single('image'), async (req, res) => {
   try {
     const userId = req.user.userId;
     const { restaurantId, name, price, description, category, cuisineType, available } = req.body;
@@ -56,7 +57,7 @@ router.post('/', authenticateToken, upload.single('image'), async (req, res) => 
 });
 
 // POST /api/menus/bulk
-router.post('/bulk', authenticateToken, async (req, res) => {
+router.post('/bulk', authenticateToken, generalLimiter, async (req, res) => {
   try {
     const userId = req.user.userId;
     const { restaurantId, items } = req.body;

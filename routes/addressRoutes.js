@@ -1,4 +1,5 @@
 const express = require('express');
+const { generalLimiter } = require('../middleware/rateLimit');
 const router = express.Router();
 const { authenticateToken } = require('../middleware/auth');
 const pool = require('../db');
@@ -17,7 +18,7 @@ router.get('/', authenticateToken, async (req, res) => {
 });
 
 // POST /api/addresses - เพิ่มที่อยู่ใหม่
-router.post('/', authenticateToken, async (req, res) => {
+router.post('/', authenticateToken, generalLimiter, async (req, res) => {
   try {
     const { address, building, phone, latitude, longitude } = req.body;
     if (!address || latitude == null || longitude == null) {

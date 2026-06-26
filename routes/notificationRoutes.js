@@ -1,4 +1,5 @@
 const express = require('express');
+const { generalLimiter } = require('../middleware/rateLimit');
 const router = express.Router();
 const webpush = require('web-push');
 const pool = require('../db');
@@ -11,7 +12,7 @@ webpush.setVapidDetails(
 );
 
 // POST /api/notifications/subscribe
-router.post('/subscribe', authenticateToken, async (req, res) => {
+router.post('/subscribe', authenticateToken, generalLimiter, async (req, res) => {
   try {
     const { subscription, userType } = req.body;
     const userId = req.user.userId;
@@ -34,7 +35,7 @@ router.post('/subscribe', authenticateToken, async (req, res) => {
 // Now: only orderId is accepted from client. restaurantId and orderNumber
 // are derived from the database, and we verify the caller actually owns
 // the order before sending anything.
-router.post('/send-restaurant', authenticateToken, async (req, res) => {
+router.post('/send-restaurant', authenticateToken, generalLimiter, async (req, res) => {
   try {
     const { orderId } = req.body;
     const userId = req.user.userId;
@@ -93,7 +94,7 @@ router.post('/send-restaurant', authenticateToken, async (req, res) => {
 // SECURITY FIX: previously any logged-in user (including a different
 // restaurant) could notify any customer for any orderId. Now we verify
 // the caller owns the restaurant linked to this order before sending.
-router.post('/notify-customer', authenticateToken, async (req, res) => {
+router.post('/notify-customer', authenticateToken, generalLimiter, async (req, res) => {
   try {
     const { orderId } = req.body;
     const userId = req.user.userId;
