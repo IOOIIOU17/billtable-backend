@@ -43,6 +43,7 @@ const { sendTrafficAlert } = require('./services/emailService');
 const alertCooldown = { 70: 0, 90: 0 };
 const ALERT_COOLDOWN_MS = 10 * 60 * 1000;
 
+// เช็ค peak matching ทุก 1 วินาที แทนที่จะเช็คค่าปัจจุบัน
 setInterval(() => {
   const state = global.trafficState;
   if (!state) return;
@@ -50,12 +51,13 @@ setInterval(() => {
   const now = Date.now();
   if (pct >= 90 && now - alertCooldown[90] > ALERT_COOLDOWN_MS) {
     alertCooldown[90] = now;
+    alertCooldown[70] = now;
     sendTrafficAlert({ concurrent: state.matchingConcurrent, threshold: state.matchingThreshold, pct }).catch(() => {});
   } else if (pct >= 70 && now - alertCooldown[70] > ALERT_COOLDOWN_MS) {
     alertCooldown[70] = now;
     sendTrafficAlert({ concurrent: state.matchingConcurrent, threshold: state.matchingThreshold, pct }).catch(() => {});
   }
-}, 30 * 1000);
+}, 1000);
 
 // ============================================================
 // Traffic Monitor State (Real-time)
