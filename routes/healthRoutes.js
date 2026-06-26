@@ -33,8 +33,11 @@ router.get('/traffic', (req, res) => {
   return res.status(200).json({
     concurrent: state.concurrent,
     requestsPerMin: state.requestsLastMinute.length,
-    threshold: state.threshold,
-    isOverLimit: state.concurrent >= state.threshold,
+    matchingConcurrent: state.matchingConcurrent || 0,
+    matchingPerMin: (state.matchingLastMinute || []).length,
+    matchingThreshold: state.matchingThreshold || 30,
+    matchingPct: Math.round(((state.matchingConcurrent || 0) / (state.matchingThreshold || 30)) * 100),
+    isOverLimit: (state.matchingConcurrent || 0) >= (state.matchingThreshold || 30),
     limitEnabled: state.limitEnabled,
   });
 });

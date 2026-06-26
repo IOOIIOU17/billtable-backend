@@ -44,7 +44,9 @@ setInterval(runBackup, 24 * 60 * 60 * 1000);
 const trafficState = {
   concurrent: 0,
   requestsLastMinute: [],
-  threshold: 30,
+  matchingConcurrent: 0,
+  matchingLastMinute: [],
+  matchingThreshold: 30,
   limitEnabled: false,
 };
 

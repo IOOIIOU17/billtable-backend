@@ -14,6 +14,23 @@ const { matchingLimiter } = require('../middleware/rateLimit');
 // รับ requirements ของลูกค้า → คืนร้าน+เมนูที่ match (top 5)
 // ============================================================
 router.post('/find', authenticateToken, matchingLimiter, async (req, res) => {
+  const state = global.trafficState;
+  if (state) {
+    // ถ้า Limiter เปิด และ matching เกิน threshold → block
+    if (state.limitEnabled && state.matchingConcurrent >= state.matchingThreshold) {
+      return res.status(503).json({
+        status: 'ERROR',
+        message: 'Too many orders being processed. Please try again in a moment.',
+      });
+    }
+    state.matchingConcurrent++;
+    const now = Date.now();
+    state.matchingLastMinute.push(now);
+    state.matchingLastMinute = state.matchingLastMinute.filter(t => now - t < 60 * 1000);
+    res.on('finish', () => {
+      state.matchingConcurrent = Math.max(0, state.matchingConcurrent - 1);
+    });
+  }
   try {
     const {
       latitude,
