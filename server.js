@@ -46,7 +46,7 @@ const trafficState = {
   requestsLastMinute: [],
   matchingConcurrent: 0,
   matchingLastMinute: [],
-  matchingThreshold: 30,
+  matchingThreshold: 42,
   limitEnabled: false,
 };
 
