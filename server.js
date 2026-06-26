@@ -127,10 +127,10 @@ app.use((req, res, next) => {
   if (req.originalUrl === '/api/payments/webhook') {
     next();
   } else {
-    express.json()(req, res, next);
+    express.json({ limit: '10kb' })(req, res, next);
   }
 });
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({ extended: true, limit: '10kb' }));
 
 // ============================================================
 // API Routes
