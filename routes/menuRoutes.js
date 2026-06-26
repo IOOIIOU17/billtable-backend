@@ -73,7 +73,7 @@ router.post('/bulk', authenticateToken, async (req, res) => {
 });
 
 // GET /api/menus/restaurant/:restaurantId
-router.get('/restaurant/:restaurantId', async (req, res) => {
+router.get('/restaurant/:restaurantId', authenticateToken, async (req, res) => {
   try {
     const restaurantId = parseInt(req.params.restaurantId, 10);
     const availableOnly = req.query.availableOnly === 'true';
