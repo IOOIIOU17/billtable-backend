@@ -2,6 +2,7 @@ const express = require('express');
 const router = require('express').Router();
 const pool = require('../db');
 const { sendTrafficAlert } = require('../services/emailService');
+const { authenticateToken, requireRole } = require('../middleware/auth');
 
 const alertCooldown = { 70: 0, 90: 0 };
 const COOLDOWN_MS = 10 * 60 * 1000;
@@ -29,7 +30,7 @@ router.get('/', async (req, res) => {
 });
 
 // GET /api/health/traffic — Real-time traffic monitor (Admin only)
-router.get('/traffic', (req, res) => {
+router.get('/traffic', authenticateToken, requireRole('admin'), (req, res) => {
   const state = global.trafficState;
   if (!state) {
     return res.status(503).json({ status: 'ERROR', message: 'Traffic monitor not initialized' });
@@ -58,7 +59,7 @@ router.get('/traffic', (req, res) => {
 });
 
 // POST /api/health/traffic/limit — Enable/Disable limiter (Admin only)
-router.post('/traffic/limit', (req, res) => {
+router.post('/traffic/limit', authenticateToken, requireRole('admin'), (req, res) => {
   const state = global.trafficState;
   if (!state) {
     return res.status(503).json({ status: 'ERROR', message: 'Traffic monitor not initialized' });
