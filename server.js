@@ -198,6 +198,12 @@ Sentry.setupExpressErrorHandler(app);
 // Error Handler
 // ============================================================
 app.use((err, req, res, next) => {
+  if (err.type === 'entity.too.large') {
+    return res.status(413).json({
+      status: 'ERROR',
+      message: 'Request too large. Maximum size is 10kb.',
+    });
+  }
   logger.error({ error: err.message }, 'Server error');
   res.status(500).json({
     status: 'ERROR',
