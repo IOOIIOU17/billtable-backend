@@ -38,29 +38,7 @@ const paymentRoutes = require('./routes/paymentRoutes');
 const { runBackup } = require('./utils/backup');
 setInterval(runBackup, 24 * 60 * 60 * 1000);
 
-// Traffic Alert Monitor — เช็คทุก 30 วินาที ไม่ต้องรอให้ Admin เปิดหน้า
-const { sendTrafficAlert } = require('./services/emailService');
-const alertCooldown = { 70: 0, 90: 0 };
-const ALERT_COOLDOWN_MS = 10 * 60 * 1000;
 
-// เช็ค peak matching ทุก 1 วินาที แทนที่จะเช็คค่าปัจจุบัน
-setInterval(() => {
-  const state = global.trafficState;
-  if (!state) return;
-  const pct = Math.round((state.matchingConcurrent / (state.matchingThreshold || 49)) * 100);
-  const now = Date.now();
-  if (pct > 0) console.log(`[TRAFFIC] matching=${state.matchingConcurrent} pct=${pct}%`);
-  if (pct >= 90 && now - alertCooldown[90] > ALERT_COOLDOWN_MS) {
-    alertCooldown[90] = now;
-    alertCooldown[70] = now;
-    console.log(`[ALERT] Sending 90% alert email`);
-    sendTrafficAlert({ concurrent: state.matchingConcurrent, threshold: state.matchingThreshold, pct }).then(() => console.log('[ALERT] Email sent OK')).catch(e => console.log('[ALERT] Email error:', e.message));
-  } else if (pct >= 70 && now - alertCooldown[70] > ALERT_COOLDOWN_MS) {
-    alertCooldown[70] = now;
-    console.log(`[ALERT] Sending 70% alert email`);
-    sendTrafficAlert({ concurrent: state.matchingConcurrent, threshold: state.matchingThreshold, pct }).then(() => console.log('[ALERT] Email sent OK')).catch(e => console.log('[ALERT] Email error:', e.message));
-  }
-}, 1000);
 
 // ============================================================
 // Traffic Monitor State (Real-time)
@@ -76,6 +54,29 @@ const trafficState = {
 
 // Export ให้ healthRoutes ดึงไปใช้
 global.trafficState = trafficState;
+
+// Traffic Alert Monitor — เช็คทุก 1 วินาที ไม่ต้องรอให้ Admin เปิดหน้า
+const { sendTrafficAlert } = require('./services/emailService');
+const alertCooldown = { 70: 0, 90: 0 };
+const ALERT_COOLDOWN_MS = 10 * 60 * 1000;
+
+setInterval(() => {
+  const state = global.trafficState;
+  if (!state) return;
+  const pct = Math.round((state.matchingConcurrent / (state.matchingThreshold || 49)) * 100);
+  const now = Date.now();
+  if (pct > 0) console.log(`[TRAFFIC] matching=${state.matchingConcurrent} pct=${pct}%`);
+  if (pct >= 90 && now - alertCooldown[90] > ALERT_COOLDOWN_MS) {
+    alertCooldown[90] = now;
+    alertCooldown[70] = now;
+    console.log('[ALERT] Sending 90% alert email');
+    sendTrafficAlert({ concurrent: state.matchingConcurrent, threshold: state.matchingThreshold, pct }).then(() => console.log('[ALERT] Email sent OK')).catch(e => console.log('[ALERT] Email error:', e.message));
+  } else if (pct >= 70 && now - alertCooldown[70] > ALERT_COOLDOWN_MS) {
+    alertCooldown[70] = now;
+    console.log('[ALERT] Sending 70% alert email');
+    sendTrafficAlert({ concurrent: state.matchingConcurrent, threshold: state.matchingThreshold, pct }).then(() => console.log('[ALERT] Email sent OK')).catch(e => console.log('[ALERT] Email error:', e.message));
+  }
+}, 1000);
 
 const app = express();
 
