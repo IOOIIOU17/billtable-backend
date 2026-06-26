@@ -49,13 +49,16 @@ setInterval(() => {
   if (!state) return;
   const pct = Math.round((state.matchingConcurrent / (state.matchingThreshold || 49)) * 100);
   const now = Date.now();
+  if (pct > 0) console.log(`[TRAFFIC] matching=${state.matchingConcurrent} pct=${pct}%`);
   if (pct >= 90 && now - alertCooldown[90] > ALERT_COOLDOWN_MS) {
     alertCooldown[90] = now;
     alertCooldown[70] = now;
-    sendTrafficAlert({ concurrent: state.matchingConcurrent, threshold: state.matchingThreshold, pct }).catch(() => {});
+    console.log(`[ALERT] Sending 90% alert email`);
+    sendTrafficAlert({ concurrent: state.matchingConcurrent, threshold: state.matchingThreshold, pct }).then(() => console.log('[ALERT] Email sent OK')).catch(e => console.log('[ALERT] Email error:', e.message));
   } else if (pct >= 70 && now - alertCooldown[70] > ALERT_COOLDOWN_MS) {
     alertCooldown[70] = now;
-    sendTrafficAlert({ concurrent: state.matchingConcurrent, threshold: state.matchingThreshold, pct }).catch(() => {});
+    console.log(`[ALERT] Sending 70% alert email`);
+    sendTrafficAlert({ concurrent: state.matchingConcurrent, threshold: state.matchingThreshold, pct }).then(() => console.log('[ALERT] Email sent OK')).catch(e => console.log('[ALERT] Email error:', e.message));
   }
 }, 1000);
 
