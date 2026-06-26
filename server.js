@@ -38,6 +38,25 @@ const paymentRoutes = require('./routes/paymentRoutes');
 const { runBackup } = require('./utils/backup');
 setInterval(runBackup, 24 * 60 * 60 * 1000);
 
+// Traffic Alert Monitor — เช็คทุก 30 วินาที ไม่ต้องรอให้ Admin เปิดหน้า
+const { sendTrafficAlert } = require('./services/emailService');
+const alertCooldown = { 70: 0, 90: 0 };
+const ALERT_COOLDOWN_MS = 10 * 60 * 1000;
+
+setInterval(() => {
+  const state = global.trafficState;
+  if (!state) return;
+  const pct = Math.round((state.matchingConcurrent / (state.matchingThreshold || 49)) * 100);
+  const now = Date.now();
+  if (pct >= 90 && now - alertCooldown[90] > ALERT_COOLDOWN_MS) {
+    alertCooldown[90] = now;
+    sendTrafficAlert({ concurrent: state.matchingConcurrent, threshold: state.matchingThreshold, pct }).catch(() => {});
+  } else if (pct >= 70 && now - alertCooldown[70] > ALERT_COOLDOWN_MS) {
+    alertCooldown[70] = now;
+    sendTrafficAlert({ concurrent: state.matchingConcurrent, threshold: state.matchingThreshold, pct }).catch(() => {});
+  }
+}, 30 * 1000);
+
 // ============================================================
 // Traffic Monitor State (Real-time)
 // ============================================================
