@@ -49,7 +49,7 @@ function createRateLimiter({ maxRequests, windowMs, message }) {
 // Matching API: หนักที่สุดต่อ database (ดู Phase 11 Load Test)
 // 30 ครั้ง/นาที ต่อ IP — เกินกว่าที่ user จริงจะกดถี่ขนาดนั้น
 const matchingLimiter = createRateLimiter({
-  maxRequests: 30,
+  maxRequests: 200, // TEMP: raised for load testing, change back to 30 after
   windowMs: 60 * 1000,
   message: 'Too many matching requests. Please wait a moment and try again.',
 });
