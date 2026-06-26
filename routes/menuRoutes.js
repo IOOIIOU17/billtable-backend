@@ -87,7 +87,7 @@ router.get('/restaurant/:restaurantId', authenticateToken, async (req, res) => {
 });
 
 // GET /api/menus/:menuItemId
-router.get('/:menuItemId', async (req, res) => {
+router.get('/:menuItemId', authenticateToken, async (req, res) => {
   try {
     const menuItemId = parseInt(req.params.menuItemId, 10);
     if (isNaN(menuItemId)) return res.status(400).json({ error: 'Invalid menu item ID' });
@@ -164,7 +164,7 @@ router.delete('/:menuItemId', authenticateToken, async (req, res) => {
 });
 
 // POST /api/menus/search
-router.post('/search', async (req, res) => {
+router.post('/search', authenticateToken, async (req, res) => {
   try {
     const results = await menuService.searchMenuItems(req.body);
     return res.status(200).json({ count: results.length, menuItems: results });

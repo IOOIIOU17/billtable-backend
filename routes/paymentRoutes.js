@@ -4,10 +4,13 @@ const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const pool = require('../db');
 const { authenticateToken, requireRole } = require('../middleware/auth');
 const { logger } = require('../middleware/logger');
+const { createRateLimiter } = require('../middleware/rateLimit');
+const paymentLimiter = createRateLimiter({ maxRequests: 10, windowMs: 60 * 1000, message: 'Too many payment requests. Please slow down.' });
+const refundLimiter = createRateLimiter({ maxRequests: 5, windowMs: 60 * 60 * 1000, message: 'Too many refund requests. Please try again later.' });
 
 // POST /api/payments/create-intent
 // ลูกค้าสร้าง PaymentIntent ก่อนจ่ายเงิน
-router.post('/create-intent', authenticateToken, async (req, res) => {
+router.post('/create-intent', authenticateToken, paymentLimiter, async (req, res) => {
   try {
     const { orderId } = req.body;
     if (!orderId) return res.status(400).json({ status: 'ERROR', message: 'orderId is required' });
@@ -168,7 +171,7 @@ router.get('/restaurant/:restaurantId', authenticateToken, async (req, res) => {
 });
 
 // POST /api/payments/refund
-router.post('/refund', authenticateToken, async (req, res) => {
+router.post('/refund', authenticateToken, refundLimiter, async (req, res) => {
   try {
     const { orderId, refundType, refundPercent } = req.body;
     if (!orderId || !refundType) {

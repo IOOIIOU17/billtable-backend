@@ -4,6 +4,9 @@ const userService = require('../services/userService');
 const { authenticateToken } = require('../middleware/auth');
 const { logger } = require('../middleware/logger');
 const { loginLimiter, resetLoginAttempts } = require('../middleware/loginLimit');
+const { createRateLimiter } = require('../middleware/rateLimit');
+const registerLimiter = createRateLimiter({ maxRequests: 5, windowMs: 60 * 60 * 1000, message: 'Too many accounts created. Please try again later.' });
+const forgotPasswordLimiter = createRateLimiter({ maxRequests: 3, windowMs: 60 * 60 * 1000, message: 'Too many password reset requests. Please try again later.' });
 const { generateSecret, generateQRCodeUrl, verifyToken } = require('../utils/totp');
 const QRCode = require('qrcode');
 const { logSecurityEvent } = require('../middleware/securityLogger');
@@ -11,7 +14,7 @@ const { auditLog } = require('../middleware/auditLog');
 const pool = require('../db');
 
 // POST /api/auth/register
-router.post('/register', async (req, res) => {
+router.post('/register', registerLimiter, async (req, res) => {
   try {
     const { email, password, name } = req.body;
     if (!email || !password || !name) {
@@ -101,7 +104,7 @@ router.post('/restaurant-login', loginLimiter, async (req, res) => {
 });
 
 // POST /api/auth/restaurant-register
-router.post('/restaurant-register', async (req, res) => {
+router.post('/restaurant-register', registerLimiter, async (req, res) => {
   try {
     const { email, password, name } = req.body;
     if (!email || !password || !name) {
@@ -230,7 +233,7 @@ router.post('/logout', authenticateToken, async (req, res) => {
 });
 
 // POST /api/auth/forgot-password
-router.post('/forgot-password', async (req, res) => {
+router.post('/forgot-password', forgotPasswordLimiter, async (req, res) => {
   try {
     const { email } = req.body;
     if (!email) return res.status(400).json({ status: 'ERROR', message: 'Email is required' });
