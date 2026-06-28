@@ -301,4 +301,20 @@ router.post('/reset-password', async (req, res) => {
   }
 });
 
+// DELETE /api/auth/account
+router.delete('/account', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    await pool.query('DELETE FROM order_items WHERE order_id IN (SELECT id FROM orders WHERE user_id = $1)', [userId]);
+    await pool.query('DELETE FROM orders WHERE user_id = $1', [userId]);
+    await pool.query('DELETE FROM revoked_tokens WHERE user_id = $1', [userId]);
+    await pool.query('DELETE FROM users WHERE id = $1', [userId]);
+    logger.info({ userId }, 'Account deleted');
+    return res.status(200).json({ status: 'OK', message: 'Account deleted successfully' });
+  } catch (error) {
+    logger.error({ error: error.message }, 'Delete account error');
+    return res.status(500).json({ status: 'ERROR', message: 'Something went wrong' });
+  }
+});
+
 module.exports = router;
