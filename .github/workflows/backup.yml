@@ -1,0 +1,37 @@
+name: Daily DB Backup
+
+on:
+  schedule:
+    - cron: '0 8 * * *'  # 00:00 LA time (UTC-8)
+  workflow_dispatch:      # รันมือได้
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install PostgreSQL client
+        run: sudo apt-get install -y postgresql-client
+
+      - name: Backup Database
+        env:
+          PGPASSWORD: bEg9K1v1xtgGIcZeMrocDG2yklSKbOQE
+        run: |
+          DATE=$(date +%Y%m%d_%H%M%S)
+          pg_dump -h dpg-d8dh52jbc2fs73ekhl30-a.oregon-postgres.render.com \
+            -U billtable_user -d billtable -F p \
+            -f backup_${DATE}.sql
+          echo "Backup created: backup_${DATE}.sql"
+
+      - name: Push to billtable-backups repo
+        env:
+          BACKUP_TOKEN: ${{ secrets.BACKUP_TOKEN }}
+        run: |
+          DATE=$(date +%Y%m%d_%H%M%S)
+          git config --global user.email "billbebela@gmail.com"
+          git config --global user.name "BillTable Backup"
+          git clone https://${BACKUP_TOKEN}@github.com/IOOIIOU17/billtable-backups.git
+          cp backup_*.sql billtable-backups/
+          cd billtable-backups
+          git add .
+          git commit -m "backup: ${DATE}"
+          git push
