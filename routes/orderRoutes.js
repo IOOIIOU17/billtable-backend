@@ -288,4 +288,92 @@ router.post('/:orderId/refund', authenticateToken, validateOrderId, async (req, 
   }
 });
 
+// ============================================================
+// Table Home (Phase 3 / Feature 2 & 3) — Members, open ordering
+// with per-item attribution, and Party Activities.
+//
+// NOTE on auth: any authenticated BillTable user who knows the numeric
+// orderId can join/add here — there is no real "invited member" check
+// yet. Real access control arrives with Phase 8 (QR + Passcode invite).
+// ============================================================
+
+// GET /api/orders/:orderId/members
+router.get('/:orderId/members', authenticateToken, validateOrderId, generalLimiter, async (req, res) => {
+  try {
+    const members = await orderService.getOrderMembers(req.params.orderId);
+    return res.status(200).json({ status: 'OK', data: { members } });
+  } catch (error) {
+    logger.error({ error: error.message }, 'Get order members error');
+    return res.status(400).json({ status: 'ERROR', message: error.message });
+  }
+});
+
+// POST /api/orders/:orderId/members  { name }
+router.post('/:orderId/members', authenticateToken, validateOrderId, generalLimiter, async (req, res) => {
+  try {
+    const { name } = req.body;
+    if (!name || !name.trim()) {
+      return res.status(400).json({ status: 'ERROR', message: 'Name is required' });
+    }
+    const member = await orderService.addOrderMember(req.params.orderId, name.trim().slice(0, 100));
+    return res.status(201).json({ status: 'OK', data: { member } });
+  } catch (error) {
+    logger.error({ error: error.message }, 'Add order member error');
+    return res.status(400).json({ status: 'ERROR', message: error.message });
+  }
+});
+
+// POST /api/orders/:orderId/items  { menuItemId, quantity, addedBy } — open ordering
+router.post('/:orderId/items', authenticateToken, validateOrderId, generalLimiter, async (req, res) => {
+  try {
+    const { menuItemId, quantity, addedBy } = req.body;
+    if (!menuItemId || !addedBy || !addedBy.trim()) {
+      return res.status(400).json({ status: 'ERROR', message: 'menuItemId and addedBy are required' });
+    }
+    const result = await orderService.addPartyItem(req.params.orderId, menuItemId, quantity, addedBy.trim().slice(0, 100));
+    return res.status(201).json({ status: 'OK', data: result });
+  } catch (error) {
+    logger.error({ error: error.message }, 'Add party item error');
+    return res.status(400).json({ status: 'ERROR', message: error.message });
+  }
+});
+
+// DELETE /api/orders/:orderId/items/:itemId  { addedBy } — decrement by 1 / remove
+router.delete('/:orderId/items/:itemId', authenticateToken, validateOrderId, generalLimiter, async (req, res) => {
+  try {
+    const { addedBy } = req.body;
+    const result = await orderService.removePartyItem(req.params.orderId, req.params.itemId, addedBy);
+    return res.status(200).json({ status: 'OK', data: result });
+  } catch (error) {
+    logger.error({ error: error.message }, 'Remove party item error');
+    return res.status(400).json({ status: 'ERROR', message: error.message });
+  }
+});
+
+// GET /api/orders/:orderId/activities
+router.get('/:orderId/activities', authenticateToken, validateOrderId, generalLimiter, async (req, res) => {
+  try {
+    const activities = await orderService.getOrderActivities(req.params.orderId);
+    return res.status(200).json({ status: 'OK', data: { activities } });
+  } catch (error) {
+    logger.error({ error: error.message }, 'Get order activities error');
+    return res.status(400).json({ status: 'ERROR', message: error.message });
+  }
+});
+
+// POST /api/orders/:orderId/activities  { title, time, createdBy }
+router.post('/:orderId/activities', authenticateToken, validateOrderId, generalLimiter, async (req, res) => {
+  try {
+    const { title, time, createdBy } = req.body;
+    if (!title || !title.trim()) {
+      return res.status(400).json({ status: 'ERROR', message: 'Title is required' });
+    }
+    const activity = await orderService.addOrderActivity(req.params.orderId, title.trim().slice(0, 150), time, createdBy);
+    return res.status(201).json({ status: 'OK', data: { activity } });
+  } catch (error) {
+    logger.error({ error: error.message }, 'Add order activity error');
+    return res.status(400).json({ status: 'ERROR', message: error.message });
+  }
+});
+
 module.exports = router;

@@ -146,4 +146,130 @@ const submitRating = async (orderId, rating, review) => {
   }
 };
 
-module.exports = { createOrder, getOrderById, getUserOrders, updateOrderStatus, getRestaurantOrders, submitRating };
+// ============================================================
+// Table Home (Phase 3 / Feature 2 & 3) — Members, open ordering
+// with per-item attribution, and Party Activities.
+//
+// Auth model for these: any authenticated BillTable user who knows the
+// numeric orderId can join/add — there is no real "invited member" check
+// yet (that's Phase 8, QR + Passcode invite). Good enough for one table
+// of people who all have the app link; not a hard access-control boundary.
+// ============================================================
+
+// Recompute subtotal/tax/platform fee/total from the current order_items
+// rows. Called any time items are added or removed so total_amount never
+// drifts out of sync.
+const recalculateOrderTotals = async (orderId) => {
+  const orderResult = await pool.query('SELECT tax_rate FROM orders WHERE id = $1', [orderId]);
+  if (orderResult.rows.length === 0) throw new Error('Order not found');
+  const taxRate = parseFloat(orderResult.rows[0].tax_rate) || 0.0875;
+  const PLATFORM_FEE_RATE = 0.10;
+
+  const itemsResult = await pool.query(
+    'SELECT COALESCE(SUM(total_price), 0) as subtotal FROM order_items WHERE order_id = $1',
+    [orderId]
+  );
+  const subtotal = parseFloat(itemsResult.rows[0].subtotal) || 0;
+  const taxAmount = parseFloat((subtotal * taxRate).toFixed(2));
+  const platformFee = parseFloat((subtotal * PLATFORM_FEE_RATE).toFixed(2));
+  const restaurantPayout = parseFloat((subtotal - platformFee).toFixed(2));
+  const totalAmount = parseFloat((subtotal + taxAmount).toFixed(2));
+
+  const result = await pool.query(
+    `UPDATE orders SET subtotal = $1, tax_amount = $2, platform_fee = $3, restaurant_payout = $4, total_amount = $5, updated_at = NOW()
+     WHERE id = $6 RETURNING *`,
+    [subtotal, taxAmount, platformFee, restaurantPayout, totalAmount, orderId]
+  );
+  return result.rows[0];
+};
+
+// Roster
+const getOrderMembers = async (orderId) => {
+  const result = await pool.query('SELECT * FROM order_members WHERE order_id = $1 ORDER BY created_at ASC', [orderId]);
+  return result.rows;
+};
+
+// role is always stored as 'guest' — who's "host" is decided by the
+// frontend from join order (first row = host), not by what a joiner
+// claims to be, since anyone can call this endpoint.
+const addOrderMember = async (orderId, name) => {
+  const existing = await pool.query(
+    'SELECT * FROM order_members WHERE order_id = $1 AND LOWER(name) = LOWER($2)',
+    [orderId, name]
+  );
+  if (existing.rows.length > 0) return existing.rows[0];
+  const result = await pool.query(
+    'INSERT INTO order_members (order_id, name, role) VALUES ($1, $2, $3) RETURNING *',
+    [orderId, name, 'guest']
+  );
+  return result.rows[0];
+};
+
+// Open ordering — any Member can add an item, tagged with their name.
+// Price always comes from the menus table for the order's own restaurant,
+// never trusted from the client (same rule as createOrder).
+const addPartyItem = async (orderId, menuItemId, quantity, addedBy) => {
+  const orderResult = await pool.query('SELECT restaurant_id FROM orders WHERE id = $1', [orderId]);
+  if (orderResult.rows.length === 0) throw new Error('Order not found');
+  const restaurantId = orderResult.rows[0].restaurant_id;
+
+  const menuResult = await pool.query(
+    'SELECT id, name, price FROM menus WHERE id = $1 AND restaurant_id = $2 AND is_available = true',
+    [menuItemId, restaurantId]
+  );
+  if (menuResult.rows.length === 0) throw new Error('Menu item is invalid or unavailable for this table');
+  const menu = menuResult.rows[0];
+  const qty = Math.max(1, parseInt(quantity) || 1);
+  const unitPrice = parseFloat(menu.price);
+  const totalPrice = parseFloat((unitPrice * qty).toFixed(2));
+
+  const itemResult = await pool.query(
+    `INSERT INTO order_items (order_id, item_name, quantity, unit_price, total_price, added_by, menu_item_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+    [orderId, menu.name, qty, unitPrice, totalPrice, addedBy, menu.id]
+  );
+
+  const order = await recalculateOrderTotals(orderId);
+  return { item: itemResult.rows[0], order };
+};
+
+// Remove/decrement an item — only the person who added it can remove it
+// (soft check on the addedBy name; there's no real per-Member auth yet).
+const removePartyItem = async (orderId, itemId, addedBy) => {
+  const itemResult = await pool.query('SELECT * FROM order_items WHERE id = $1 AND order_id = $2', [itemId, orderId]);
+  if (itemResult.rows.length === 0) throw new Error('Item not found');
+  const item = itemResult.rows[0];
+  if (addedBy && item.added_by && item.added_by.toLowerCase() !== String(addedBy).toLowerCase()) {
+    throw new Error('Only the person who added this item can remove it');
+  }
+
+  if (item.quantity > 1) {
+    const newQty = item.quantity - 1;
+    const newTotal = parseFloat((parseFloat(item.unit_price) * newQty).toFixed(2));
+    await pool.query('UPDATE order_items SET quantity = $1, total_price = $2 WHERE id = $3', [newQty, newTotal, itemId]);
+  } else {
+    await pool.query('DELETE FROM order_items WHERE id = $1', [itemId]);
+  }
+
+  const order = await recalculateOrderTotals(orderId);
+  return { order };
+};
+
+// Activities
+const getOrderActivities = async (orderId) => {
+  const result = await pool.query('SELECT * FROM order_activities WHERE order_id = $1 ORDER BY created_at ASC', [orderId]);
+  return result.rows;
+};
+
+const addOrderActivity = async (orderId, title, time, createdBy) => {
+  const result = await pool.query(
+    'INSERT INTO order_activities (order_id, title, time, created_by) VALUES ($1, $2, $3, $4) RETURNING *',
+    [orderId, title, time || null, createdBy || null]
+  );
+  return result.rows[0];
+};
+
+module.exports = {
+  createOrder, getOrderById, getUserOrders, updateOrderStatus, getRestaurantOrders, submitRating,
+  getOrderMembers, addOrderMember, addPartyItem, removePartyItem, getOrderActivities, addOrderActivity,
+};
