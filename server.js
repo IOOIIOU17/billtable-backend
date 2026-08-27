@@ -38,6 +38,13 @@ const paymentRoutes = require('./routes/paymentRoutes');
 const { runBackup } = require('./utils/backup');
 setInterval(runBackup, 24 * 60 * 60 * 1000);
 
+// Chat auto-expiry — delete order_messages once the Party's date/time is
+// more than 1 day in the past (per Tony). Checked hourly so it clears out
+// reasonably soon after expiry, not just once a day.
+const orderService = require('./services/orderService');
+setInterval(() => orderService.cleanupExpiredMessages(), 60 * 60 * 1000);
+orderService.cleanupExpiredMessages(); // also run once at startup
+
 
 
 // ============================================================

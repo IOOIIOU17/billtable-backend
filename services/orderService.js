@@ -316,8 +316,37 @@ const addOrderMessage = async (orderId, senderName, message) => {
   return result.rows[0];
 };
 
+// Chat auto-expiry — per Tony: messages should disappear on their own once
+// the Party's date/time (orders.delivery_time) is more than 1 day in the
+// past. Only clears order_messages rows; the order itself and its
+// items/members/activities are untouched. delivery_time is stored as a
+// "YYYY-MM-DD HH:MM" string, so we cast it to timestamp for the compare —
+// works whether the column is TEXT or already TIMESTAMP.
+const cleanupExpiredMessages = async () => {
+  try {
+    const result = await pool.query(
+      `DELETE FROM order_messages
+       WHERE order_id IN (
+         SELECT id FROM orders
+         WHERE delivery_time IS NOT NULL
+           AND delivery_time <> ''
+           AND delivery_time::timestamp < NOW() - INTERVAL '1 day'
+       )`
+    );
+    if (result.rowCount > 0) {
+      logger.info({ deleted: result.rowCount }, 'Expired chat messages cleaned up');
+    }
+    return result.rowCount;
+  } catch (error) {
+    // Don't let a bad delivery_time value (or any other hiccup) crash the
+    // interval — just log it and try again next run.
+    logger.error({ error: error.message }, 'Chat cleanup failed');
+    return 0;
+  }
+};
+
 module.exports = {
   createOrder, getOrderById, getUserOrders, updateOrderStatus, getRestaurantOrders, submitRating,
   getTableView, getOrderMembers, addOrderMember, addPartyItem, removePartyItem, getOrderActivities, addOrderActivity,
-  getOrderMessages, addOrderMessage,
+  getOrderMessages, addOrderMessage, cleanupExpiredMessages,
 };
