@@ -183,6 +183,22 @@ const recalculateOrderTotals = async (orderId) => {
   return result.rows[0];
 };
 
+// "Table view" — a safe, ownership-unrestricted read of an order for
+// anyone at the table (QR-invited guests included), used by Table Home.
+// Deliberately separate from getOrderById, which stays IDOR-protected for
+// the order owner's own screens (OrderHistory / OrderTracking / rating).
+const getTableView = async (orderId) => {
+  const result = await pool.query(
+    `SELECT o.*, r.name as restaurant_name, r.address as restaurant_address
+     FROM orders o LEFT JOIN restaurants r ON o.restaurant_id = r.id
+     WHERE o.id = $1`,
+    [orderId]
+  );
+  if (result.rows.length === 0) throw new Error('Order not found');
+  const itemsResult = await pool.query('SELECT * FROM order_items WHERE order_id = $1', [orderId]);
+  return { ...result.rows[0], items: itemsResult.rows };
+};
+
 // Roster
 const getOrderMembers = async (orderId) => {
   const result = await pool.query('SELECT * FROM order_members WHERE order_id = $1 ORDER BY created_at ASC', [orderId]);
@@ -271,5 +287,5 @@ const addOrderActivity = async (orderId, title, time, createdBy) => {
 
 module.exports = {
   createOrder, getOrderById, getUserOrders, updateOrderStatus, getRestaurantOrders, submitRating,
-  getOrderMembers, addOrderMember, addPartyItem, removePartyItem, getOrderActivities, addOrderActivity,
+  getTableView, getOrderMembers, addOrderMember, addPartyItem, removePartyItem, getOrderActivities, addOrderActivity,
 };

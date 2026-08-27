@@ -297,6 +297,21 @@ router.post('/:orderId/refund', authenticateToken, validateOrderId, async (req, 
 // yet. Real access control arrives with Phase 8 (QR + Passcode invite).
 // ============================================================
 
+// GET /api/orders/:orderId/table
+// Safe, ownership-unrestricted view for Table Home — anyone authenticated
+// who knows the orderId (host or a QR-invited guest) can load the table.
+// Does NOT expose the full /:orderId payload's owner-only fields; just
+// enough to render the table (restaurant, theme, guests, items).
+router.get('/:orderId/table', authenticateToken, validateOrderId, generalLimiter, async (req, res) => {
+  try {
+    const order = await orderService.getTableView(req.params.orderId);
+    return res.status(200).json({ status: 'OK', data: { order } });
+  } catch (error) {
+    logger.error({ error: error.message }, 'Get table view error');
+    return res.status(404).json({ status: 'ERROR', message: 'Order not found' });
+  }
+});
+
 // GET /api/orders/:orderId/members
 router.get('/:orderId/members', authenticateToken, validateOrderId, generalLimiter, async (req, res) => {
   try {
