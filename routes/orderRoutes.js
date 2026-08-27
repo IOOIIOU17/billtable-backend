@@ -391,4 +391,35 @@ router.post('/:orderId/activities', authenticateToken, validateOrderId, generalL
   }
 });
 
+// GET /api/orders/:orderId/messages?sinceId=123 — chat history (or just
+// new messages since sinceId, for polling).
+router.get('/:orderId/messages', authenticateToken, validateOrderId, generalLimiter, async (req, res) => {
+  try {
+    const sinceId = req.query.sinceId && /^\d+$/.test(req.query.sinceId) ? req.query.sinceId : null;
+    const messages = await orderService.getOrderMessages(req.params.orderId, sinceId);
+    return res.status(200).json({ status: 'OK', data: { messages } });
+  } catch (error) {
+    logger.error({ error: error.message }, 'Get order messages error');
+    return res.status(400).json({ status: 'ERROR', message: error.message });
+  }
+});
+
+// POST /api/orders/:orderId/messages  { senderName, message }
+router.post('/:orderId/messages', authenticateToken, validateOrderId, generalLimiter, async (req, res) => {
+  try {
+    const { senderName, message } = req.body;
+    if (!senderName || !senderName.trim()) {
+      return res.status(400).json({ status: 'ERROR', message: 'senderName is required' });
+    }
+    if (!message || !message.trim()) {
+      return res.status(400).json({ status: 'ERROR', message: 'Message is required' });
+    }
+    const saved = await orderService.addOrderMessage(req.params.orderId, senderName.trim().slice(0, 100), message.trim().slice(0, 1000));
+    return res.status(201).json({ status: 'OK', data: { message: saved } });
+  } catch (error) {
+    logger.error({ error: error.message }, 'Add order message error');
+    return res.status(400).json({ status: 'ERROR', message: error.message });
+  }
+});
+
 module.exports = router;

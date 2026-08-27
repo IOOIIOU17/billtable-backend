@@ -285,7 +285,39 @@ const addOrderActivity = async (orderId, title, time, createdBy) => {
   return result.rows[0];
 };
 
+// Chat — real messages for the table, replacing the old placeholder.
+// Polled by the client every few seconds while the Chat panel is open
+// (no WebSocket infra needed). `sinceId` lets the client ask for only
+// new messages after the last one it already has.
+const getOrderMessages = async (orderId, sinceId) => {
+  if (sinceId) {
+    const result = await pool.query(
+      'SELECT * FROM order_messages WHERE order_id = $1 AND id > $2 ORDER BY created_at ASC',
+      [orderId, sinceId]
+    );
+    return result.rows;
+  }
+  // No sinceId — full history, capped to the most recent 200 so a long
+  // event doesn't load an ever-growing message list.
+  const result = await pool.query(
+    `SELECT * FROM (
+       SELECT * FROM order_messages WHERE order_id = $1 ORDER BY created_at DESC LIMIT 200
+     ) recent ORDER BY created_at ASC`,
+    [orderId]
+  );
+  return result.rows;
+};
+
+const addOrderMessage = async (orderId, senderName, message) => {
+  const result = await pool.query(
+    'INSERT INTO order_messages (order_id, sender_name, message) VALUES ($1, $2, $3) RETURNING *',
+    [orderId, senderName, message]
+  );
+  return result.rows[0];
+};
+
 module.exports = {
   createOrder, getOrderById, getUserOrders, updateOrderStatus, getRestaurantOrders, submitRating,
   getTableView, getOrderMembers, addOrderMember, addPartyItem, removePartyItem, getOrderActivities, addOrderActivity,
+  getOrderMessages, addOrderMessage,
 };
