@@ -8,6 +8,7 @@ const pool = require('../db');
 const { createOrderLimiter, generalLimiter } = require('../middleware/rateLimit');
 const { sendOrderNotificationToRestaurant, sendOrderConfirmationToCustomer } = require('../services/emailService');
 const { logSecurityEvent } = require('../middleware/securityLogger');
+const { notifyRestaurantNewOrder } = require('../services/pushService');
 
 // ตรวจสอบว่า orderId เป็นตัวเลขก่อนส่งเข้า database
 // ป้องกัน database error message หลุดออกมา (เช่น "invalid input syntax for type integer")
@@ -62,6 +63,11 @@ router.post('/', authenticateToken, createOrderLimiter, async (req, res) => {
         theme, deliveryTime,
       }).catch(() => {});
     }
+    // Push notify the restaurant right away (web push + Expo). Never blocks the response.
+    notifyRestaurantNewOrder(restaurantId, order).catch((e) => {
+      logger.warn({ error: e.message, orderId: order.id }, 'notifyRestaurantNewOrder failed');
+    });
+
     return res.status(201).json({ status: 'OK', message: 'Order created successfully', data: order });
   } catch (error) {
     logger.error({ error: error.message }, 'Create order endpoint error');
