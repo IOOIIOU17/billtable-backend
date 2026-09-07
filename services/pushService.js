@@ -24,7 +24,7 @@ async function sendExpo(token, payload) {
       to: token,
       title: payload.title,
       body: payload.body,
-      data: { orderId: payload.orderId, type: payload.type },
+      data: { orderId: payload.orderId, type: payload.type, order: payload.order },
       sound: 'neworder.wav',
       priority: 'high',
       channelId: 'orders',
@@ -112,6 +112,22 @@ async function notifyRestaurantNewOrder(restaurantId, order) {
     title: 'New Order',
     body: `${order.order_number} - ${people} - ${amount}`.trim(),
     orderId: order.id,
+    // Only the fields the incoming-order card renders. Expo caps a push
+    // payload at 4KB, so the whole row is not worth sending.
+    order: {
+      id: order.id,
+      order_number: order.order_number,
+      status: order.status,
+      theme: order.theme,
+      total_amount: order.total_amount,
+      guest_count: order.guest_count,
+      delivery_time: order.delivery_time,
+      delivery_address: order.delivery_address,
+      allergies: order.allergies,
+      avoid_spicy: order.avoid_spicy,
+      created_at: order.created_at,
+      restaurant_payout: order.restaurant_payout,
+    },
   });
 }
 
