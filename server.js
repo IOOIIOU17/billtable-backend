@@ -43,6 +43,10 @@ setInterval(runBackup, 24 * 60 * 60 * 1000);
 // reasonably soon after expiry, not just once a day.
 const orderService = require('./services/orderService');
 setInterval(() => orderService.cleanupExpiredMessages(), 60 * 60 * 1000);
+
+const { runDeliveryReminders } = require('./services/reminderService');
+setInterval(runDeliveryReminders, 5 * 60 * 1000);
+runDeliveryReminders();
 orderService.cleanupExpiredMessages(); // also run once at startup
 
 
