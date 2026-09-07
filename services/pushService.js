@@ -31,16 +31,6 @@ async function sendExpo(token, payload) {
     }),
   });
   const json = await res.json().catch(() => ({}));
-  logger.info(
-    {
-      sentTitle: payload.title,
-      sentBody: payload.body,
-      tokenTail: String(token).slice(-14),
-      expoStatus: res.status,
-      expoBody: JSON.stringify(json).slice(0, 300),
-    },
-    'EXPO PUSH TRACE'
-  );
   if (json && json.data && json.data.status === 'error') {
     throw new Error(json.data.message || 'Expo push error');
   }
