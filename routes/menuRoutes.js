@@ -115,6 +115,7 @@ router.put('/:menuItemId', authenticateToken, upload.single('image'), async (req
 
     const updated = await menuService.updateMenuItem(menuItemId, {
       ...req.body,
+      imageUrl,
       image_url: imageUrl,
     });
     return res.status(200).json({ message: 'Menu item updated successfully', menuItem: updated });
