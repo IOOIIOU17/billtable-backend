@@ -25,7 +25,7 @@ async function sendExpo(token, payload) {
       title: payload.title,
       body: payload.body,
       data: { orderId: payload.orderId, type: payload.type },
-      sound: 'default',
+      sound: 'neworder.wav',
       priority: 'high',
       channelId: 'orders',
     }),
