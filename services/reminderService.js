@@ -6,8 +6,8 @@ const { pushToRestaurant } = require('./pushService');
 // the time the food is due. Two reminders: one with enough runway to start
 // cooking, one last call in case the first was missed.
 const WINDOWS = [
-  { hours: 4, column: 'reminder_4h_sent', label: 'Party in 4 hours' },
-  { hours: 1, column: 'reminder_1h_sent', label: 'Party in 1 hour' },
+  { hours: 4, column: 'reminder_4h_sent', label: 'Delivery in 4 hours' },
+  { hours: 1, column: 'reminder_1h_sent', label: 'Delivery in 1 hour' },
 ];
 
 const DUE_STATUSES = ['accepted', 'preparing'];
