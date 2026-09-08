@@ -238,7 +238,7 @@ router.post('/forgot-password', forgotPasswordLimiter, async (req, res) => {
     const { email } = req.body;
     if (!email) return res.status(400).json({ status: 'ERROR', message: 'Email is required' });
 
-    const userResult = await pool.query('SELECT id, name FROM users WHERE email = $1', [email]);
+    const userResult = await pool.query('SELECT id, name, role FROM users WHERE email = $1', [email]);
     // ไม่บอกว่า email มีหรือไม่มี (security best practice)
     if (userResult.rows.length === 0) {
       return res.status(200).json({ status: 'OK', message: 'If this email exists, a reset link has been sent.' });
@@ -256,7 +256,10 @@ router.post('/forgot-password', forgotPasswordLimiter, async (req, res) => {
       [user.id, token, expiresAt]
     );
 
-    const resetLink = `https://billtable.co/reset-password?token=${token}`;
+    const resetBase = user.role === 'restaurant'
+      ? 'https://restaurant.billtable.co'
+      : 'https://billtable.co';
+    const resetLink = `${resetBase}/reset-password?token=${token}`;
     const { sendPasswordResetEmail } = require('../services/emailService');
     await sendPasswordResetEmail({ toEmail: email, toName: user.name, resetLink });
 
