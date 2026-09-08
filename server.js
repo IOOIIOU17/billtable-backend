@@ -47,6 +47,9 @@ setInterval(() => orderService.cleanupExpiredMessages(), 60 * 60 * 1000);
 const { runDeliveryReminders } = require('./services/reminderService');
 setInterval(runDeliveryReminders, 5 * 60 * 1000);
 runDeliveryReminders();
+
+const { runUnansweredSweep, RETRY_EVERY_MS } = require('./services/repeatService');
+setInterval(runUnansweredSweep, RETRY_EVERY_MS);
 orderService.cleanupExpiredMessages(); // also run once at startup
 
 

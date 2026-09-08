@@ -28,6 +28,8 @@ async function sendExpo(token, payload) {
       sound: 'neworder.wav',
       priority: 'high',
       channelId: 'orders',
+      // Shows on the app icon so a glance at the home screen is enough.
+      badge: payload.badge,
     }),
   });
   const json = await res.json().catch(() => ({}));
@@ -112,6 +114,7 @@ async function notifyRestaurantNewOrder(restaurantId, order) {
     title: 'New Order',
     body: `${order.order_number} - ${people} - ${amount}`.trim(),
     orderId: order.id,
+    badge: 1,
     // Only the fields the incoming-order card renders. Expo caps a push
     // payload at 4KB, so the whole row is not worth sending.
     order: {
