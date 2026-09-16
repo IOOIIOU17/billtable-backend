@@ -181,6 +181,207 @@ router.get('/restaurant', authenticateToken, requireRole('restaurant'), async (r
   }
 });
 
+// ─── Restaurant side: switches, venue details and packages ─────────────
+// Everything here works on the restaurant the signed-in owner actually owns.
+// The id is looked up from owner_user_id, never taken from the request.
+
+const myRestaurant = async (userId) => {
+  const r = await pool.query(
+    `SELECT id, name, is_active, accepts_delivery, accepts_dinein, deposit_percent,
+            parking_type, parking_note, max_party_size, min_advance_hours
+       FROM restaurants
+      WHERE owner_user_id = $1 AND is_deleted = false
+      ORDER BY id LIMIT 1`,
+    [userId]
+  );
+  return r.rows[0] || null;
+};
+
+router.get('/settings/mine', authenticateToken, requireRole('restaurant'), async (req, res) => {
+  try {
+    const restaurant = await myRestaurant(req.user.userId);
+    if (!restaurant) return fail(res, 404, 'No restaurant on this account');
+
+    const packages = await pool.query(
+      `SELECT id, name, price_per_person, min_guests, max_guests, included_items, is_active
+         FROM dinein_packages WHERE restaurant_id = $1 ORDER BY id`,
+      [restaurant.id]
+    );
+    res.json({ success: true, restaurant, packages: packages.rows });
+  } catch (error) {
+    logger.error({ error: error.message }, 'Failed to load dine-in settings');
+    fail(res, 500, 'Could not load your settings');
+  }
+});
+
+// Open for orders stays the master switch; these two sit under it.
+router.patch('/settings/order-types', authenticateToken, requireRole('restaurant'), async (req, res) => {
+  try {
+    const { acceptsDelivery, acceptsDinein } = req.body;
+    if (typeof acceptsDelivery !== 'boolean' && typeof acceptsDinein !== 'boolean') {
+      return fail(res, 400, 'Nothing to change');
+    }
+
+    const restaurant = await myRestaurant(req.user.userId);
+    if (!restaurant) return fail(res, 404, 'No restaurant on this account');
+
+    // A restaurant cannot take party bookings with nothing to book.
+    if (acceptsDinein === true) {
+      const live = await pool.query(
+        `SELECT COUNT(*)::int AS n FROM dinein_packages
+          WHERE restaurant_id = $1 AND is_active = TRUE`,
+        [restaurant.id]
+      );
+      if (live.rows[0].n === 0) {
+        return fail(res, 400, 'Add a party package before you take dine-in bookings');
+      }
+    }
+
+    const next = {
+      delivery: typeof acceptsDelivery === 'boolean' ? acceptsDelivery : restaurant.accepts_delivery,
+      dinein: typeof acceptsDinein === 'boolean' ? acceptsDinein : restaurant.accepts_dinein,
+    };
+    const updated = await pool.query(
+      `UPDATE restaurants
+          SET accepts_delivery = $2, accepts_dinein = $3, updated_at = CURRENT_TIMESTAMP
+        WHERE id = $1
+        RETURNING id, accepts_delivery, accepts_dinein, is_active`,
+      [restaurant.id, next.delivery, next.dinein]
+    );
+    await logAudit(req.user, 'restaurant_order_types', restaurant.id, next);
+    res.json({ success: true, restaurant: updated.rows[0] });
+  } catch (error) {
+    logger.error({ error: error.message }, 'Failed to change order types');
+    fail(res, 500, 'Could not save your switches');
+  }
+});
+
+router.patch('/settings/venue', authenticateToken, requireRole('restaurant'), async (req, res) => {
+  try {
+    const { depositPercent, parkingType, parkingNote, maxPartySize, minAdvanceHours } = req.body;
+    const restaurant = await myRestaurant(req.user.userId);
+    if (!restaurant) return fail(res, 404, 'No restaurant on this account');
+
+    // Checked here as well as in the database so the message reads plainly.
+    if (depositPercent !== undefined) {
+      const pct = Number(depositPercent);
+      if (Number.isNaN(pct) || pct < 15 || pct > 50) {
+        return fail(res, 400, 'Deposit has to sit between 15% and 50%');
+      }
+    }
+    if (maxPartySize !== undefined && Number(maxPartySize) < 1) {
+      return fail(res, 400, 'Max party size has to be at least 1 guest');
+    }
+    if (minAdvanceHours !== undefined && Number(minAdvanceHours) < 0) {
+      return fail(res, 400, 'Notice period cannot be negative');
+    }
+
+    const updated = await pool.query(
+      `UPDATE restaurants
+          SET deposit_percent   = COALESCE($2, deposit_percent),
+              parking_type      = COALESCE($3, parking_type),
+              parking_note      = COALESCE($4, parking_note),
+              max_party_size    = COALESCE($5, max_party_size),
+              min_advance_hours = COALESCE($6, min_advance_hours),
+              updated_at = CURRENT_TIMESTAMP
+        WHERE id = $1
+        RETURNING id, deposit_percent, parking_type, parking_note, max_party_size, min_advance_hours`,
+      [restaurant.id,
+       depositPercent !== undefined ? depositPercent : null,
+       parkingType !== undefined ? parkingType : null,
+       parkingNote !== undefined ? parkingNote : null,
+       maxPartySize !== undefined ? maxPartySize : null,
+       minAdvanceHours !== undefined ? minAdvanceHours : null]
+    );
+    await logAudit(req.user, 'restaurant_dinein_settings', restaurant.id, updated.rows[0]);
+    res.json({ success: true, restaurant: updated.rows[0] });
+  } catch (error) {
+    logger.error({ error: error.message }, 'Failed to save venue settings');
+    fail(res, 500, 'Could not save your settings');
+  }
+});
+
+router.post('/packages', authenticateToken, requireRole('restaurant'), async (req, res) => {
+  try {
+    const { name, pricePerPerson, minGuests, maxGuests, includedItems } = req.body;
+    if (!name || !pricePerPerson) return fail(res, 400, 'Name and price per person are required');
+    if (Number(pricePerPerson) <= 0) return fail(res, 400, 'Price per person has to be more than zero');
+
+    const restaurant = await myRestaurant(req.user.userId);
+    if (!restaurant) return fail(res, 404, 'No restaurant on this account');
+
+    const created = await pool.query(
+      `INSERT INTO dinein_packages
+         (restaurant_id, name, price_per_person, min_guests, max_guests, included_items)
+       VALUES ($1, $2, $3, COALESCE($4, 4), $5, $6)
+       RETURNING id, name, price_per_person, min_guests, max_guests, included_items, is_active`,
+      [restaurant.id, name, pricePerPerson, minGuests || null, maxGuests || null, includedItems || null]
+    );
+    await logAudit(req.user, 'dinein_package_created', restaurant.id, created.rows[0]);
+    res.status(201).json({ success: true, package: created.rows[0] });
+  } catch (error) {
+    logger.error({ error: error.message }, 'Failed to create package');
+    fail(res, 500, 'Could not save the package');
+  }
+});
+
+router.patch('/packages/:packageId', authenticateToken, requireRole('restaurant'), async (req, res) => {
+  try {
+    const { name, pricePerPerson, minGuests, maxGuests, includedItems, isActive } = req.body;
+    const restaurant = await myRestaurant(req.user.userId);
+    if (!restaurant) return fail(res, 404, 'No restaurant on this account');
+
+    const owned = await pool.query(
+      'SELECT id FROM dinein_packages WHERE id = $1 AND restaurant_id = $2',
+      [req.params.packageId, restaurant.id]
+    );
+    if (owned.rows.length === 0) return fail(res, 404, 'That package is not yours');
+    if (pricePerPerson !== undefined && Number(pricePerPerson) <= 0) {
+      return fail(res, 400, 'Price per person has to be more than zero');
+    }
+
+    const updated = await pool.query(
+      `UPDATE dinein_packages
+          SET name             = COALESCE($2, name),
+              price_per_person = COALESCE($3, price_per_person),
+              min_guests       = COALESCE($4, min_guests),
+              max_guests       = COALESCE($5, max_guests),
+              included_items   = COALESCE($6, included_items),
+              is_active        = COALESCE($7, is_active),
+              updated_at = NOW()
+        WHERE id = $1
+        RETURNING id, name, price_per_person, min_guests, max_guests, included_items, is_active`,
+      [req.params.packageId,
+       name !== undefined ? name : null,
+       pricePerPerson !== undefined ? pricePerPerson : null,
+       minGuests !== undefined ? minGuests : null,
+       maxGuests !== undefined ? maxGuests : null,
+       includedItems !== undefined ? includedItems : null,
+       typeof isActive === 'boolean' ? isActive : null]
+    );
+
+    // Turning off the last package also closes dine-in, so nobody can book
+    // a table with nothing behind it.
+    let dineinTurnedOff = false;
+    if (isActive === false) {
+      const live = await pool.query(
+        'SELECT COUNT(*)::int AS n FROM dinein_packages WHERE restaurant_id = $1 AND is_active = TRUE',
+        [restaurant.id]
+      );
+      if (live.rows[0].n === 0) {
+        await pool.query('UPDATE restaurants SET accepts_dinein = FALSE WHERE id = $1', [restaurant.id]);
+        dineinTurnedOff = true;
+      }
+    }
+
+    await logAudit(req.user, 'dinein_package_updated', restaurant.id, updated.rows[0]);
+    res.json({ success: true, package: updated.rows[0], dineinTurnedOff });
+  } catch (error) {
+    logger.error({ error: error.message }, 'Failed to update package');
+    fail(res, 500, 'Could not save the package');
+  }
+});
+
 // ─── One booking, for whoever is entitled to see it ────────────────────
 router.get('/:orderId', authenticateToken, async (req, res) => {
   try {
