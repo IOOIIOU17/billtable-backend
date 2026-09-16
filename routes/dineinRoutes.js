@@ -5,6 +5,7 @@ const { logger } = require('../middleware/logger');
 const { authenticateToken, requireRole } = require('../middleware/auth');
 const dinein = require('../services/dineinService');
 const { pushToRestaurant, pushToCustomer } = require('../services/pushService');
+const { addOrderMessage } = require('../services/orderService');
 
 // Dine-in party booking. Everything here lives on the existing orders table
 // with order_mode = 'dinein', so the table chat, members and admin views that
@@ -19,6 +20,13 @@ const ownedRestaurantIds = async (userId) => {
     [userId]
   );
   return r.rows.map((row) => row.id);
+};
+
+// orders.refund_status only accepts none | partial | full, so map the split onto it.
+const refundStatusFor = (split, deposit) => {
+  if (Number(split.refundToCustomer) <= 0) return 'none';
+  if (Number(split.refundToCustomer) >= Number(deposit)) return 'full';
+  return 'partial';
 };
 
 const loadBooking = async (orderId) => {
@@ -185,6 +193,251 @@ router.get('/:orderId', authenticateToken, async (req, res) => {
   } catch (error) {
     logger.error({ error: error.message }, 'Failed to load booking');
     fail(res, 500, 'Could not load the booking');
+  }
+});
+
+// ─── Restaurant confirms the table ─────────────────────────────────────
+router.patch('/:orderId/confirm', authenticateToken, requireRole('restaurant'), async (req, res) => {
+  try {
+    const booking = await loadBooking(req.params.orderId);
+    if (!booking) return fail(res, 404, 'Booking not found');
+    if (booking.owner_user_id !== req.user.userId) return fail(res, 403, 'Not your restaurant');
+    if (booking.status !== 'requested') return fail(res, 400, `This booking is already ${booking.status}`);
+
+    await pool.query(
+      `UPDATE orders SET status = 'confirmed', updated_at = NOW() WHERE id = $1`,
+      [booking.id]
+    );
+    await logAudit(req.user, 'dinein_confirmed', booking.id, { partySize: booking.party_size });
+
+    addOrderMessage(booking.id, 'BillTable', `${booking.restaurant_name} confirmed your table.`)
+      .catch((e) => logger.error({ error: e.message }, 'Confirm chat note failed'));
+    pushToCustomer(booking.user_id, {
+      title: 'Your table is confirmed',
+      body: `${booking.restaurant_name} is expecting ${booking.party_size} of you.`,
+      data: { type: 'dinein_confirmed', orderId: booking.id },
+    }).catch((e) => logger.error({ error: e.message }, 'Confirm push failed'));
+
+    res.json({ success: true, status: 'confirmed' });
+  } catch (error) {
+    logger.error({ error: error.message }, 'Confirm booking failed');
+    fail(res, 500, 'Could not confirm the booking');
+  }
+});
+
+// ─── Restaurant turns it down: the guest gets everything back ──────────
+router.patch('/:orderId/decline', authenticateToken, requireRole('restaurant'), async (req, res) => {
+  try {
+    const booking = await loadBooking(req.params.orderId);
+    if (!booking) return fail(res, 404, 'Booking not found');
+    if (booking.owner_user_id !== req.user.userId) return fail(res, 403, 'Not your restaurant');
+    if (!['requested', 'confirmed'].includes(booking.status)) {
+      return fail(res, 400, `This booking is already ${booking.status}`);
+    }
+
+    const split = await dinein.quoteCancellation({
+      reservedAt: booking.reserved_at,
+      depositAmount: booking.deposit_amount,
+      platformCut: booking.platform_fee,
+      cancelledBy: 'restaurant',
+    });
+
+    await pool.query(
+      `UPDATE orders
+          SET status = 'declined', cancelled_by = 'restaurant', cancelled_at = NOW(),
+              refund_status = 'full', payout_status = 'refunded',
+              platform_fee = 0, restaurant_payout = 0, updated_at = NOW()
+        WHERE id = $1`,
+      [booking.id]
+    );
+    await logAudit(req.user, 'dinein_declined', booking.id, split);
+
+    addOrderMessage(booking.id, 'BillTable', 'The restaurant could not take this table. Your deposit is being refunded in full.')
+      .catch((e) => logger.error({ error: e.message }, 'Decline chat note failed'));
+    pushToCustomer(booking.user_id, {
+      title: "That table didn't work out",
+      body: 'Full refund on the way. Pick another table whenever you like.',
+      data: { type: 'dinein_declined', orderId: booking.id },
+    }).catch((e) => logger.error({ error: e.message }, 'Decline push failed'));
+
+    res.json({ success: true, status: 'declined', refund: split });
+  } catch (error) {
+    logger.error({ error: error.message }, 'Decline booking failed');
+    fail(res, 500, 'Could not decline the booking');
+  }
+});
+
+// ─── The host drops the restaurant but keeps the table together ────────
+router.post('/:orderId/cancel-table', authenticateToken, async (req, res) => {
+  try {
+    const booking = await loadBooking(req.params.orderId);
+    if (!booking) return fail(res, 404, 'Booking not found');
+    if (booking.user_id !== req.user.userId) return fail(res, 403, 'Only the host can cancel this table');
+    if (!['requested', 'confirmed'].includes(booking.status)) {
+      return fail(res, 400, `This booking is already ${booking.status}`);
+    }
+
+    const split = await dinein.quoteCancellation({
+      reservedAt: booking.reserved_at,
+      depositAmount: booking.deposit_amount,
+      platformCut: booking.platform_fee,
+      cancelledBy: 'customer',
+    });
+
+    await pool.query(
+      `UPDATE orders
+          SET status = 'cancelled', cancelled_by = 'customer', cancelled_at = NOW(),
+              refund_status = $2, payout_status = $3,
+              platform_fee = $4, restaurant_payout = $5, updated_at = NOW()
+        WHERE id = $1`,
+      [booking.id, refundStatusFor(split, booking.deposit_amount),
+       split.toRestaurant > 0 ? 'released' : 'forfeited', split.toPlatform, split.toRestaurant]
+    );
+    await logAudit(req.user, 'dinein_cancel_table', booking.id, split);
+
+    addOrderMessage(booking.id, 'BillTable', `The booking at ${booking.restaurant_name} is off. This table is still open — pick another place.`)
+      .catch((e) => logger.error({ error: e.message }, 'Cancel-table chat note failed'));
+    pushToRestaurant(booking.restaurant_id, {
+      title: 'Table cancelled',
+      body: `${booking.party_size} guests · ${new Date(booking.reserved_at).toDateString()}`,
+      data: { type: 'dinein_cancelled', orderId: booking.id },
+    }).catch((e) => logger.error({ error: e.message }, 'Cancel-table push failed'));
+
+    res.json({ success: true, status: 'cancelled', tableStillOpen: true, refund: split });
+  } catch (error) {
+    logger.error({ error: error.message }, 'Cancel table failed');
+    fail(res, 500, 'Could not cancel the booking');
+  }
+});
+
+// ─── The host calls the whole party off and closes the table ───────────
+router.post('/:orderId/cancel-party', authenticateToken, async (req, res) => {
+  try {
+    const booking = await loadBooking(req.params.orderId);
+    if (!booking) return fail(res, 404, 'Booking not found');
+    if (booking.user_id !== req.user.userId) return fail(res, 403, 'Only the host can cancel this party');
+    if (['completed', 'cancelled', 'declined'].includes(booking.status)) {
+      return fail(res, 400, `This party is already ${booking.status}`);
+    }
+
+    const split = await dinein.quoteCancellation({
+      reservedAt: booking.reserved_at,
+      depositAmount: booking.deposit_amount,
+      platformCut: booking.platform_fee,
+      cancelledBy: 'customer',
+    });
+
+    await pool.query(
+      `UPDATE orders
+          SET status = 'cancelled', cancelled_by = 'customer', cancelled_at = NOW(),
+              table_closed_at = NOW(), refund_status = $2, payout_status = $3,
+              platform_fee = $4, restaurant_payout = $5, updated_at = NOW()
+        WHERE id = $1`,
+      [booking.id, refundStatusFor(split, booking.deposit_amount),
+       split.toRestaurant > 0 ? 'released' : 'forfeited', split.toPlatform, split.toRestaurant]
+    );
+    await logAudit(req.user, 'dinein_cancel_party', booking.id, split);
+
+    addOrderMessage(booking.id, 'BillTable', 'The host called this party off. The table is closed.')
+      .catch((e) => logger.error({ error: e.message }, 'Cancel-party chat note failed'));
+    pushToRestaurant(booking.restaurant_id, {
+      title: 'Party cancelled',
+      body: `${booking.party_size} guests · ${new Date(booking.reserved_at).toDateString()}`,
+      data: { type: 'dinein_cancelled', orderId: booking.id },
+    }).catch((e) => logger.error({ error: e.message }, 'Cancel-party push failed'));
+
+    res.json({ success: true, status: 'cancelled', tableClosed: true, refund: split });
+  } catch (error) {
+    logger.error({ error: error.message }, 'Cancel party failed');
+    fail(res, 500, 'Could not cancel the party');
+  }
+});
+
+// ─── Move the table to another day: free once, 72 hours out ────────────
+router.post('/:orderId/reschedule', authenticateToken, async (req, res) => {
+  try {
+    const { reservedAt } = req.body;
+    if (!reservedAt) return fail(res, 400, 'A new date is required');
+
+    const booking = await loadBooking(req.params.orderId);
+    if (!booking) return fail(res, 404, 'Booking not found');
+    if (booking.user_id !== req.user.userId) return fail(res, 403, 'Only the host can move this table');
+    if (!['requested', 'confirmed'].includes(booking.status)) {
+      return fail(res, 400, `This booking is already ${booking.status}`);
+    }
+
+    const check = await dinein.canReschedule(booking.reserved_at, booking.reschedule_count);
+    if (!check.allowed) return fail(res, 400, check.reason);
+
+    const ahead = await pool.query(
+      `SELECT EXTRACT(EPOCH FROM ($1::timestamptz - NOW())) / 3600 AS hours_until,
+              (SELECT min_advance_hours FROM restaurants WHERE id = $2) AS min_hours`,
+      [reservedAt, booking.restaurant_id]
+    );
+    const { hours_until: hoursUntil, min_hours: minHours } = ahead.rows[0];
+    if (Number(hoursUntil) < Number(minHours)) {
+      return fail(res, 400, `The new date needs ${minHours} hours notice`);
+    }
+
+    // Back to 'requested': the restaurant has to agree to the new day too.
+    await pool.query(
+      `UPDATE orders
+          SET reserved_at = $2, status = 'requested',
+              reschedule_count = reschedule_count + 1, updated_at = NOW()
+        WHERE id = $1`,
+      [booking.id, reservedAt]
+    );
+    await logAudit(req.user, 'dinein_rescheduled', booking.id, { from: booking.reserved_at, to: reservedAt });
+
+    addOrderMessage(booking.id, 'BillTable', 'The host asked to move this table. Waiting on the restaurant.')
+      .catch((e) => logger.error({ error: e.message }, 'Reschedule chat note failed'));
+    pushToRestaurant(booking.restaurant_id, {
+      title: 'Guest asked to move a table',
+      body: `${booking.party_size} guests · ${new Date(reservedAt).toDateString()}`,
+      data: { type: 'dinein_reschedule', orderId: booking.id },
+    }).catch((e) => logger.error({ error: e.message }, 'Reschedule push failed'));
+
+    res.json({ success: true, status: 'requested', reservedAt });
+  } catch (error) {
+    logger.error({ error: error.message }, 'Reschedule failed');
+    fail(res, 500, 'Could not move the table');
+  }
+});
+
+// ─── The party happened: release what is held for the restaurant ───────
+router.patch('/:orderId/complete', authenticateToken, requireRole('restaurant'), async (req, res) => {
+  try {
+    const booking = await loadBooking(req.params.orderId);
+    if (!booking) return fail(res, 404, 'Booking not found');
+    if (booking.owner_user_id !== req.user.userId) return fail(res, 403, 'Not your restaurant');
+    if (booking.status !== 'confirmed') return fail(res, 400, `This booking is ${booking.status}, not confirmed`);
+
+    // A party cannot be over before it starts. The database decides "now".
+    const when = await pool.query(
+      `SELECT NOW() >= reserved_at AS has_started FROM orders WHERE id = $1`,
+      [booking.id]
+    );
+    if (!when.rows[0].has_started) return fail(res, 400, 'This party has not happened yet');
+
+    await pool.query(
+      `UPDATE orders
+          SET status = 'completed', completed_at = NOW(),
+              payout_status = 'released', updated_at = NOW()
+        WHERE id = $1`,
+      [booking.id]
+    );
+    await logAudit(req.user, 'dinein_completed', booking.id, { payout: booking.restaurant_payout });
+
+    pushToCustomer(booking.user_id, {
+      title: 'Hope it was a good one',
+      body: `Thanks for taking a table at ${booking.restaurant_name}.`,
+      data: { type: 'dinein_completed', orderId: booking.id },
+    }).catch((e) => logger.error({ error: e.message }, 'Complete push failed'));
+
+    res.json({ success: true, status: 'completed', payout: booking.restaurant_payout });
+  } catch (error) {
+    logger.error({ error: error.message }, 'Complete booking failed');
+    fail(res, 500, 'Could not close the booking');
   }
 });
 
