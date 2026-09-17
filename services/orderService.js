@@ -329,8 +329,7 @@ const cleanupExpiredMessages = async () => {
        WHERE order_id IN (
          SELECT id FROM orders
          WHERE delivery_time IS NOT NULL
-           AND delivery_time <> ''
-           AND delivery_time::timestamp < NOW() - INTERVAL '1 day'
+           AND delivery_time < NOW() - INTERVAL '1 day'
        )`
     );
     if (result.rowCount > 0) {
