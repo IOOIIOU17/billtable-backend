@@ -4,6 +4,8 @@ const pool = require('../db');
 const { logger } = require('../middleware/logger');
 const { authenticateToken, requireRole } = require('../middleware/auth');
 const dinein = require('../services/dineinService');
+const { round2 } = require('../services/dineinService');
+const { calculateDistance } = require('../services/matchingService');
 const { pushToRestaurant, pushToCustomer } = require('../services/pushService');
 const { addOrderMessage } = require('../services/orderService');
 
@@ -379,6 +381,162 @@ router.patch('/packages/:packageId', authenticateToken, requireRole('restaurant'
   } catch (error) {
     logger.error({ error: error.message }, 'Failed to update package');
     fail(res, 500, 'Could not save the package');
+  }
+});
+
+// ─── Find three places that suit the theme, near where they want to be ──
+// Dine-in ignores delivery_radius_miles: the guests travel, not the food.
+// One fixed ring around the pin, then rank by how well each place fits.
+const SEARCH_MILES = 5;
+
+// Theme 45 · budget 30 · distance 15 · room for the group 10.
+// When no budget is given its share drops out and the rest is rescaled.
+const scoreVenue = ({ themeMatch, cheapestPrice, budgetPerPerson, distance, maxPartySize, partySize }) => {
+  const theme = themeMatch === 'full' ? 45 : themeMatch === 'partial' ? 25 : 0;
+  const near = 15 * Math.max(0, 1 - distance / SEARCH_MILES);
+  const room = 10 * (maxPartySize && partySize > 0
+    ? Math.min(1, maxPartySize / (partySize * 1.5))
+    : 1);
+
+  if (!budgetPerPerson || !cheapestPrice) {
+    // 70 points available, stretched back out to 100.
+    return Math.round(((theme + near + room) / 70) * 100);
+  }
+  const budget = cheapestPrice <= budgetPerPerson
+    ? 30
+    : 30 * Math.max(0, 1 - (cheapestPrice - budgetPerPerson) / budgetPerPerson);
+  return Math.round(theme + budget + near + room);
+};
+
+const themeMatchLevel = (cuisineTypes, wanted) => {
+  if (!wanted) return 'none';
+  const types = (cuisineTypes || []).map((t) => String(t).toLowerCase());
+  if (types.some((t) => t === wanted)) return 'full';
+  if (types.some((t) => t.includes(wanted) || wanted.includes(t))) return 'partial';
+  return 'none';
+};
+
+router.post('/find-venue', authenticateToken, async (req, res) => {
+  try {
+    const { latitude, longitude, partySize, theme, cuisineType, budgetPerPerson, reservedAt } = req.body;
+    if (latitude === undefined || longitude === undefined) {
+      return fail(res, 400, 'A place to search around is required');
+    }
+    const size = Number(partySize) || 0;
+    const budget = Number(budgetPerPerson) || 0;
+
+    const open = await pool.query(
+      `SELECT r.id, r.name, r.address, r.city, r.state, r.latitude, r.longitude,
+              r.cuisine_types, r.logo_url, r.cover_image_url,
+              r.deposit_percent, r.parking_type, r.parking_note,
+              r.max_party_size, r.min_advance_hours
+         FROM restaurants r
+        WHERE r.accepts_dinein = TRUE AND r.is_active = TRUE AND r.is_deleted = false
+          AND r.latitude IS NOT NULL AND r.longitude IS NOT NULL
+          AND EXISTS (SELECT 1 FROM dinein_packages p
+                       WHERE p.restaurant_id = r.id AND p.is_active = TRUE)`
+    );
+
+    // Hours of notice the guest is actually giving, worked out by the database.
+    let hoursAhead = null;
+    if (reservedAt) {
+      const ahead = await pool.query(
+        `SELECT EXTRACT(EPOCH FROM ($1::timestamptz - NOW())) / 3600 AS h`,
+        [reservedAt]
+      );
+      hoursAhead = Number(ahead.rows[0].h);
+    }
+
+    const wanted = (theme || cuisineType || '').toLowerCase().trim();
+
+    // Hard filters first: a place that cannot take this booking never ranks.
+    const eligible = open.rows
+      .map((r) => ({
+        ...r,
+        distance: calculateDistance(
+          Number(latitude), Number(longitude),
+          Number(r.latitude), Number(r.longitude)
+        ),
+      }))
+      .filter((r) => r.distance <= SEARCH_MILES)
+      .filter((r) => !r.max_party_size || size === 0 || size <= r.max_party_size)
+      .filter((r) => hoursAhead === null || hoursAhead >= Number(r.min_advance_hours));
+
+    if (eligible.length === 0) {
+      return res.json({ success: true, searchedMiles: SEARCH_MILES, venues: [] });
+    }
+
+    const packages = await pool.query(
+      `SELECT id, restaurant_id, name, price_per_person, min_guests, max_guests, included_items
+         FROM dinein_packages
+        WHERE restaurant_id = ANY($1) AND is_active = TRUE
+        ORDER BY price_per_person`,
+      [eligible.map((r) => r.id)]
+    );
+
+    const ranked = eligible.map((r) => {
+      const mine = packages.rows.filter((p) => p.restaurant_id === r.id);
+      const fits = size > 0
+        ? mine.filter((p) => size >= p.min_guests && (!p.max_guests || size <= p.max_guests))
+        : mine;
+      const usable = fits.length ? fits : mine;
+      const cheapest = usable.length ? Number(usable[0].price_per_person) : 0;
+      const match = themeMatchLevel(r.cuisine_types, wanted);
+
+      return {
+        row: r,
+        usable,
+        hasFittingPackage: fits.length > 0,
+        themeMatch: match,
+        matchPercent: scoreVenue({
+          themeMatch: match,
+          cheapestPrice: cheapest,
+          budgetPerPerson: budget,
+          distance: r.distance,
+          maxPartySize: r.max_party_size,
+          partySize: size,
+        }),
+      };
+    })
+      // A place with no package for this group size cannot really host it.
+      .filter((v) => size === 0 || v.hasFittingPackage)
+      .sort((a, b) => b.matchPercent - a.matchPercent || a.row.distance - b.row.distance)
+      .slice(0, 3);
+
+    const venues = ranked.map(({ row: r, usable, themeMatch, matchPercent }) => ({
+      id: r.id,
+      name: r.name,
+      address: r.address,
+      city: r.city,
+      state: r.state,
+      latitude: r.latitude,
+      longitude: r.longitude,
+      logoUrl: r.logo_url,
+      coverImageUrl: r.cover_image_url,
+      cuisineTypes: r.cuisine_types,
+      distanceMiles: Math.round(r.distance * 10) / 10,
+      matchPercent,
+      themeMatch,
+      depositPercent: Number(r.deposit_percent),
+      parkingType: r.parking_type,
+      parkingNote: r.parking_note,
+      maxPartySize: r.max_party_size,
+      minAdvanceHours: r.min_advance_hours,
+      packages: usable.map((p) => ({
+        id: p.id,
+        name: p.name,
+        pricePerPerson: Number(p.price_per_person),
+        minGuests: p.min_guests,
+        maxGuests: p.max_guests,
+        includedItems: p.included_items,
+        estimatedTotal: size > 0 ? round2(Number(p.price_per_person) * size) : null,
+      })),
+    }));
+
+    res.json({ success: true, searchedMiles: SEARCH_MILES, venues });
+  } catch (error) {
+    logger.error({ error: error.message }, 'Venue search failed');
+    fail(res, 500, 'Could not find a place right now');
   }
 });
 
