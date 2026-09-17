@@ -51,6 +51,10 @@ runDeliveryReminders();
 
 const { runUnansweredSweep, RETRY_EVERY_MS } = require('./services/repeatService');
 setInterval(runUnansweredSweep, RETRY_EVERY_MS);
+
+const { runPartyAutoComplete, AUTO_COMPLETE_EVERY_MS } = require('./services/dineinService');
+setInterval(runPartyAutoComplete, AUTO_COMPLETE_EVERY_MS);
+runPartyAutoComplete();
 orderService.cleanupExpiredMessages(); // also run once at startup
 
 

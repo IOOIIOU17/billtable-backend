@@ -131,4 +131,33 @@ const canReschedule = async (reservedAt, rescheduleCount) => {
   return { allowed: true, reason: null, hoursUntil };
 };
 
-module.exports = { getSettings, quoteBooking, quoteCancellation, canReschedule, round2 };
+// A confirmed party that came and went and was never closed out by the
+// restaurant gets closed here, so money held for them is not stuck forever.
+// "Now" and the cutoff are both worked out by the database.
+const runPartyAutoComplete = async () => {
+  try {
+    const settings = await getSettings();
+    const due = await pool.query(
+      `UPDATE orders
+          SET status = 'completed', completed_at = NOW(),
+              payout_status = 'released', updated_at = NOW()
+        WHERE order_mode = 'dinein'
+          AND status = 'confirmed'
+          AND reserved_at < NOW() - ($1 || ' hours')::interval
+        RETURNING id, restaurant_payout`,
+      [String(settings.dinein_autocomplete_hours)]
+    );
+    if (due.rowCount > 0) {
+      logger.info({ closed: due.rowCount }, 'Parties closed out automatically');
+    }
+    return due.rowCount;
+  } catch (error) {
+    // A bad row must not kill the interval — log it and try again next run.
+    logger.error({ error: error.message }, 'Party auto-complete failed');
+    return 0;
+  }
+};
+
+const AUTO_COMPLETE_EVERY_MS = 30 * 60 * 1000;
+
+module.exports = { getSettings, quoteBooking, quoteCancellation, canReschedule, round2, runPartyAutoComplete, AUTO_COMPLETE_EVERY_MS };
