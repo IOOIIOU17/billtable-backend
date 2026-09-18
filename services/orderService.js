@@ -189,7 +189,8 @@ const recalculateOrderTotals = async (orderId) => {
 // the order owner's own screens (OrderHistory / OrderTracking / rating).
 const getTableView = async (orderId) => {
   const result = await pool.query(
-    `SELECT o.*, r.name as restaurant_name, r.address as restaurant_address
+    `SELECT o.*, r.name as restaurant_name, r.address as restaurant_address,
+            r.latitude as restaurant_latitude, r.longitude as restaurant_longitude
      FROM orders o LEFT JOIN restaurants r ON o.restaurant_id = r.id
      WHERE o.id = $1`,
     [orderId]
