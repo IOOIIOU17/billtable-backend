@@ -17,8 +17,12 @@ const CARD_FIELDS = `id, order_number, status, theme, total_amount, guest_count,
   restaurant_payout, restaurant_id`;
 
 async function runWindow({ hours, column, label }) {
-  // delivery_time is stored without a zone and written from UTC ISO strings,
-  // and Render runs in UTC, so NOW() is the right thing to compare against.
+  // delivery_time is stored without a zone, written by the client apps as
+  // local wall-clock time (verified against location.jsx in both the
+  // customer-native and customer-web repos — not UTC, despite what an
+  // earlier version of this comment said). This comparison runs entirely
+  // inside Postgres via NOW(), which is independent of how the Node
+  // process later parses the fetched rows, so it stays correct regardless.
   const result = await pool.query(
     `SELECT ${CARD_FIELDS}
        FROM orders
