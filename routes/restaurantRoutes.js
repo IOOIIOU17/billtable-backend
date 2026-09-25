@@ -188,6 +188,65 @@ router.patch('/:restaurantId/active-status', authenticateToken, async (req, res)
     }
 });
 
+// POST /:restaurantId/request-deletion — owner or admin asks to permanently
+// remove a restaurant. Blocked while any order is still in progress.
+// Starts the 30-day grace period instead of deleting instantly — see
+// migrations/007_restaurant_deletion.sql for why.
+router.post('/:restaurantId/request-deletion', authenticateToken, async (req, res) => {
+    try {
+        const restaurantId = parseInt(req.params.restaurantId, 10);
+        const userId = req.user.userId;
+
+        if (isNaN(restaurantId)) {
+            return res.status(400).json({ error: 'Invalid restaurant ID' });
+        }
+
+        const existing = await restaurantService.getRestaurantById(restaurantId);
+        if (!existing) {
+            return res.status(404).json({ error: 'Restaurant not found' });
+        }
+        if (req.user.role !== 'admin' && existing.owner_user_id !== userId) {
+            return res.status(403).json({ error: 'You do not have permission to delete this restaurant' });
+        }
+
+        const updated = await restaurantService.requestRestaurantDeletion(restaurantId, userId);
+        return res.status(200).json({
+            message: `Deletion requested. This restaurant will be permanently removed in ${restaurantService.DELETION_GRACE_DAYS} days unless cancelled.`,
+            restaurant: updated,
+        });
+    } catch (error) {
+        console.error('Error requesting restaurant deletion:', error);
+        return res.status(400).json({ error: error.message || 'Failed to request deletion' });
+    }
+});
+
+// POST /:restaurantId/cancel-deletion — undo a pending deletion any time
+// before the grace period ends.
+router.post('/:restaurantId/cancel-deletion', authenticateToken, async (req, res) => {
+    try {
+        const restaurantId = parseInt(req.params.restaurantId, 10);
+        const userId = req.user.userId;
+
+        if (isNaN(restaurantId)) {
+            return res.status(400).json({ error: 'Invalid restaurant ID' });
+        }
+
+        const existing = await restaurantService.getRestaurantById(restaurantId);
+        if (!existing) {
+            return res.status(404).json({ error: 'Restaurant not found' });
+        }
+        if (req.user.role !== 'admin' && existing.owner_user_id !== userId) {
+            return res.status(403).json({ error: 'You do not have permission to change this restaurant' });
+        }
+
+        const updated = await restaurantService.cancelRestaurantDeletion(restaurantId);
+        return res.status(200).json({ message: 'Deletion cancelled. Restaurant is open again.', restaurant: updated });
+    } catch (error) {
+        console.error('Error cancelling restaurant deletion:', error);
+        return res.status(400).json({ error: error.message || 'Failed to cancel deletion' });
+    }
+});
+
 router.post('/onboarding-check', authenticateToken, async (req, res) => {
     try {
         const { restaurantId } = req.body;

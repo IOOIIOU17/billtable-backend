@@ -162,7 +162,9 @@ async function updateRestaurant(restaurantId, patch) {
         isActive: 'is_active',
         logoUrl: 'logo_url',
         coverImageUrl: 'cover_image_url',
-        isDeleted: 'is_deleted',
+        // isDeleted intentionally NOT in this map anymore — permanent deletion
+        // must go through requestRestaurantDeletion()/the grace-period flow
+        // below, never a plain field-by-field PATCH. See migration 007.
     };
 
     // Build SET clause dynamically based on provided fields
@@ -282,6 +284,88 @@ async function setRestaurantActiveStatus(restaurantId, isActive) {
     return result.rows[0] || null;
 }
 
+// ============================================================
+// Restaurant deletion — grace-period flow (checked 25 Sep 2026
+// against UberEats/DoorDash: neither lets a restaurant vanish
+// instantly and permanently with zero checks, so BillTable
+// doesn't either). See migration 007_restaurant_deletion.sql.
+// ============================================================
+
+const DELETION_GRACE_DAYS = 30;
+
+// Any order in one of these statuses is still "in progress" — a
+// restaurant can't request deletion while one exists, so nobody's
+// active delivery or dine-in booking silently gets abandoned.
+const UNRESOLVED_ORDER_STATUSES = ['pending', 'accepted', 'preparing', 'requested', 'confirmed'];
+
+/**
+ * Owner (or admin) asks to permanently remove a restaurant.
+ * Blocks if there's an order still in progress. Otherwise closes
+ * the restaurant to customers immediately (is_active = false) and
+ * starts the DELETION_GRACE_DAYS countdown — it is NOT actually
+ * deleted yet, so cancelRestaurantDeletion() can still undo it.
+ */
+async function requestRestaurantDeletion(restaurantId, requestedByUserId) {
+    const restaurant = await getRestaurantById(restaurantId);
+    if (!restaurant) throw new Error('Restaurant not found');
+    if (restaurant.is_deleted) throw new Error('Restaurant is already deleted');
+
+    const activeOrders = await db.query(
+        `SELECT COUNT(*)::int AS count FROM orders
+         WHERE restaurant_id = $1 AND status = ANY($2::text[])`,
+        [restaurantId, UNRESOLVED_ORDER_STATUSES]
+    );
+    const count = activeOrders.rows[0]?.count || 0;
+    if (count > 0) {
+        throw new Error(`Cannot delete: ${count} order(s) still in progress. Resolve them first.`);
+    }
+
+    const result = await db.query(
+        `UPDATE restaurants
+         SET is_active = false, deletion_requested_at = NOW(), deletion_requested_by = $2, updated_at = CURRENT_TIMESTAMP
+         WHERE id = $1
+         RETURNING *`,
+        [restaurantId, requestedByUserId]
+    );
+    return result.rows[0];
+}
+
+/**
+ * Cancel a pending deletion any time before the grace period ends.
+ * Reopens the restaurant (is_active = true) since asking to cancel
+ * implies wanting to keep operating.
+ */
+async function cancelRestaurantDeletion(restaurantId) {
+    const result = await db.query(
+        `UPDATE restaurants
+         SET deletion_requested_at = NULL, deletion_requested_by = NULL, is_active = true, updated_at = CURRENT_TIMESTAMP
+         WHERE id = $1 AND is_deleted = false
+         RETURNING *`,
+        [restaurantId]
+    );
+    if (result.rows.length === 0) throw new Error('Restaurant not found or already permanently deleted');
+    return result.rows[0];
+}
+
+/**
+ * Background sweep (called on an interval from server.js): finalizes
+ * any restaurant whose grace period has fully elapsed.
+ */
+async function runPendingDeletionSweep() {
+    const result = await db.query(
+        `UPDATE restaurants
+         SET is_deleted = true, updated_at = CURRENT_TIMESTAMP
+         WHERE deletion_requested_at IS NOT NULL
+           AND deletion_requested_at <= NOW() - INTERVAL '30 days'
+           AND is_deleted = false
+         RETURNING id, name`
+    );
+    if (result.rows.length > 0) {
+        console.log('[restaurantService] Finalized deletions after grace period:', result.rows);
+    }
+    return result.rows;
+}
+
 // Export all public functions
 module.exports = {
     registerRestaurant,
@@ -291,4 +375,8 @@ module.exports = {
     updateRestaurant,
     findNearbyRestaurants,
     setRestaurantActiveStatus,
+    requestRestaurantDeletion,
+    cancelRestaurantDeletion,
+    runPendingDeletionSweep,
+    DELETION_GRACE_DAYS,
 };

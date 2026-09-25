@@ -57,6 +57,11 @@ setInterval(runPartyAutoComplete, AUTO_COMPLETE_EVERY_MS);
 runPartyAutoComplete();
 orderService.cleanupExpiredMessages(); // also run once at startup
 
+// Restaurant deletion grace-period sweep — checked every 6h, finalizes
+// (is_deleted = true) any restaurant whose 30-day window has fully elapsed.
+const restaurantService = require('./services/restaurantService');
+setInterval(() => restaurantService.runPendingDeletionSweep(), 6 * 60 * 60 * 1000);
+
 
 
 // ============================================================
