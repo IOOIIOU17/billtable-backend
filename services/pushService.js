@@ -24,10 +24,21 @@ async function sendExpo(token, payload) {
       to: token,
       title: payload.title,
       body: payload.body,
-      data: { orderId: payload.orderId, type: payload.type, order: payload.order },
-      sound: 'neworder.wav',
+      // Two calling conventions exist in this codebase: notifyRestaurantNewOrder
+      // sets orderId/type/order at the top level, the dine-in routes nest them
+      // under `data`. Merge both so a tapped notification always carries the
+      // orderId the app needs to deep-link into the right screen.
+      data: {
+        orderId: payload.orderId,
+        type: payload.type,
+        order: payload.order,
+        ...(payload.data || {}),
+      },
+      // Defaults preserve the existing restaurant alert exactly; a caller
+      // (e.g. a customer-facing push) can override either.
+      sound: payload.sound || 'neworder.wav',
       priority: 'high',
-      channelId: 'orders',
+      channelId: payload.channelId || 'orders',
       // Shows on the app icon so a glance at the home screen is enough.
       badge: payload.badge,
     }),

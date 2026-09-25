@@ -574,6 +574,7 @@ router.patch('/:orderId/confirm', authenticateToken, requireRole('restaurant'), 
     pushToCustomer(booking.user_id, {
       title: 'Your table is confirmed',
       body: `${booking.restaurant_name} is expecting ${booking.party_size} of you.`,
+      sound: 'default',
       data: { type: 'dinein_confirmed', orderId: booking.id },
     }).catch((e) => logger.error({ error: e.message }, 'Confirm push failed'));
 
@@ -616,6 +617,7 @@ router.patch('/:orderId/decline', authenticateToken, requireRole('restaurant'), 
     pushToCustomer(booking.user_id, {
       title: "That table didn't work out",
       body: 'Full refund on the way. Pick another table whenever you like.',
+      sound: 'default',
       data: { type: 'dinein_declined', orderId: booking.id },
     }).catch((e) => logger.error({ error: e.message }, 'Decline push failed'));
 
@@ -790,6 +792,7 @@ router.patch('/:orderId/complete', authenticateToken, requireRole('restaurant'),
     pushToCustomer(booking.user_id, {
       title: 'Hope it was a good one',
       body: `Thanks for taking a table at ${booking.restaurant_name}.`,
+      sound: 'default',
       data: { type: 'dinein_completed', orderId: booking.id },
     }).catch((e) => logger.error({ error: e.message }, 'Complete push failed'));
 
