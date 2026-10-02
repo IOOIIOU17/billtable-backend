@@ -23,11 +23,20 @@ function validateOrderId(req, res, next) {
 // POST /api/orders
 router.post('/', authenticateToken, createOrderLimiter, async (req, res) => {
   try {
-    const { restaurantId, items, theme, guestCount, budget, allergies, avoidSpicy, deliveryTime, deliveryAddress, latitude, longitude } = req.body;
+    const { restaurantId, items, theme, guestCount, budget, allergies, avoidSpicy, deliveryTime, deliveryAddress, latitude, longitude, budgetWarningShown, budgetWarningAcknowledged, customerComment } = req.body;
     if (!restaurantId || !items) {
       return res.status(400).json({ status: 'ERROR', message: 'Restaurant ID and items are required' });
     }
-    const order = await orderService.createOrder(req.user.userId, restaurantId, items, { theme, guestCount, budget, allergies, avoidSpicy, deliveryTime, deliveryAddress, latitude, longitude });
+    // budgetWarning* and customerComment were sent by both customer apps but
+    // dropped here, so they were never saved -- the restaurant never saw the
+    // customer's note and the budget-warning flags were always false.
+    // Fixed 2026-10-02. Comment is capped at 500 chars.
+    const order = await orderService.createOrder(req.user.userId, restaurantId, items, {
+      theme, guestCount, budget, allergies, avoidSpicy, deliveryTime, deliveryAddress, latitude, longitude,
+      budgetWarningShown: budgetWarningShown === true,
+      budgetWarningAcknowledged: budgetWarningAcknowledged === true,
+      customerComment: typeof customerComment === 'string' ? (customerComment.trim().slice(0, 500) || null) : null,
+    });
 
     // ดึงข้อมูลร้านและลูกค้าเพื่อส่ง email
     const restaurantResult = await pool.query('SELECT name, email FROM restaurants WHERE id = $1', [restaurantId]);
