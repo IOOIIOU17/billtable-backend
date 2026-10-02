@@ -28,6 +28,10 @@ const corsMiddleware = cors({
     'https://billtable-customer-web.onrender.com',
     'https://billtable-restaurant.onrender.com',
     'https://billtable-admin.onrender.com',
+    // Website built from the app code (customer + restaurant) -- test URLs
+    // before billtable.co / restaurant.billtable.co are moved over.
+    'https://billtable-customer-app.onrender.com',
+    'https://billtable-restaurant-app.onrender.com',
     'https://billtable.co',
     'https://www.billtable.co',
     'https://restaurant.billtable.co',
