@@ -195,6 +195,7 @@ async function findMatches(requirements) {
         id: m.id,
         name: m.name,
         price: parseFloat(m.price),
+        serving_size: m.serving_size || 1,
         spicy_level: m.spicy_level,
         image_url: m.image_url,
       })),

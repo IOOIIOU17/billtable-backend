@@ -1,5 +1,6 @@
 const pool = require('../db');
 const { logger } = require('../middleware/logger');
+const { platesNeeded } = require('../utils/portions');
 
 // Create Order
 const createOrder = async (userId, restaurantId, items, extra = {}) => {
@@ -10,7 +11,7 @@ const createOrder = async (userId, restaurantId, items, extra = {}) => {
     // Verify all menuItemIds exist and belong to this restaurant, then get real prices from DB
     const menuIds = items.map((item) => item.menuItemId);
     const menuResult = await pool.query(
-      'SELECT id, name, price FROM menus WHERE id = ANY($1) AND restaurant_id = $2 AND is_available = true',
+      'SELECT id, name, price, serving_size FROM menus WHERE id = ANY($1) AND restaurant_id = $2 AND is_available = true',
       [menuIds, restaurantId]
     );
     if (menuResult.rows.length !== items.length) {
@@ -18,7 +19,7 @@ const createOrder = async (userId, restaurantId, items, extra = {}) => {
     }
     const priceMap = {};
     for (const row of menuResult.rows) {
-      priceMap[row.id] = { name: row.name, price: parseFloat(row.price) };
+      priceMap[row.id] = { name: row.name, price: parseFloat(row.price), servingSize: row.serving_size };
     }
 
     // Calculate total using DB prices only — never trust client-supplied price
@@ -28,7 +29,13 @@ const createOrder = async (userId, restaurantId, items, extra = {}) => {
     let foodTotal = 0;
     const resolvedItems = items.map((item) => {
       const menu = priceMap[item.menuItemId];
-      const qty = Math.max(1, parseInt(item.quantity) || 1);
+      // Plates are worked out HERE from the guest count and the restaurant's
+      // own plate size (menus.serving_size) -- previously both customer apps
+      // always sent quantity 1, so a 25-guest party paid for 1 plate of each
+      // dish. See utils/portions.js. Falls back to the client's quantity only
+      // when there is no guest count.
+      const plates = platesNeeded(guestCount, items.length, menu.servingSize);
+      const qty = plates ?? Math.max(1, parseInt(item.quantity) || 1);
       const lineTotal = menu.price * qty;
       foodTotal += lineTotal;
       return { name: menu.name, quantity: qty, unitPrice: menu.price, totalPrice: lineTotal };

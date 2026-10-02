@@ -23,6 +23,8 @@ async function verifyRestaurantOwnership(restaurantId, userId) {
 }
 
 // POST /api/menus
+const { normalizeServingSize } = require('../utils/portions');
+
 router.post('/', authenticateToken, generalLimiter, upload.single('image'), async (req, res) => {
   try {
     const userId = req.user.userId;
@@ -46,6 +48,8 @@ router.post('/', authenticateToken, generalLimiter, upload.single('image'), asyn
       description: description || null,
       category: category || 'main',
       cuisineType: cuisineType || null,
+      // "One plate feeds N people" -- set by the restaurant (see utils/portions.js)
+      servingSize: normalizeServingSize(req.body.servingSize) ?? 1,
     });
 
     return res.status(201).json({ message: 'Menu item added successfully', menuItem: newItem });
@@ -117,6 +121,7 @@ router.put('/:menuItemId', authenticateToken, upload.single('image'), async (req
       ...req.body,
       imageUrl,
       image_url: imageUrl,
+      servingSize: normalizeServingSize(req.body.servingSize) ?? undefined,
     });
     return res.status(200).json({ message: 'Menu item updated successfully', menuItem: updated });
   } catch (error) {
