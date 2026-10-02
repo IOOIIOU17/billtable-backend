@@ -21,16 +21,20 @@ async function runWindow({ hours, column, label }) {
   // local wall-clock time (verified against location.jsx in both the
   // customer-native and customer-web repos — not UTC, despite what an
   // earlier version of this comment said). This comparison runs entirely
-  // inside Postgres via NOW(), which is independent of how the Node
-  // process later parses the fetched rows, so it stays correct regardless.
+  // inside Postgres via NOW(). NOW() is an absolute instant (timestamptz),
+  // so a naive delivery_time compared to it directly was read in the DB
+  // session's zone (UTC on Render) -- an LA 6:30pm party looked like
+  // 6:30pm UTC, 7-8 hours too early, so reminders fired hours early.
+  // AT TIME ZONE 'America/Los_Angeles' turns the naive LA wall-clock value
+  // into the real instant first (BillTable is LA-only). Fixed 2026-10-02.
   const result = await pool.query(
     `SELECT ${CARD_FIELDS}
        FROM orders
       WHERE status = ANY($1)
         AND delivery_time IS NOT NULL
         AND ${column} = FALSE
-        AND delivery_time > NOW()
-        AND delivery_time <= NOW() + ($2 || ' hours')::interval
+        AND (delivery_time AT TIME ZONE 'America/Los_Angeles') > NOW()
+        AND (delivery_time AT TIME ZONE 'America/Los_Angeles') <= NOW() + ($2 || ' hours')::interval
       ORDER BY delivery_time ASC
       LIMIT 50`,
     [DUE_STATUSES, String(hours)]

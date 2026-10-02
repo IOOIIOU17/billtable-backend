@@ -321,8 +321,9 @@ const addOrderMessage = async (orderId, senderName, message) => {
 // the Party's date/time (orders.delivery_time) is more than 1 day in the
 // past. Only clears order_messages rows; the order itself and its
 // items/members/activities are untouched. delivery_time is stored as a
-// "YYYY-MM-DD HH:MM" string, so we cast it to timestamp for the compare —
-// works whether the column is TEXT or already TIMESTAMP.
+// naive LA wall-clock timestamp, so it is converted with AT TIME ZONE
+// 'America/Los_Angeles' before comparing to NOW() (otherwise Postgres reads
+// it as UTC and the cutoff lands 7-8 hours early). Fixed 2026-10-02.
 const cleanupExpiredMessages = async () => {
   try {
     const result = await pool.query(
@@ -330,7 +331,7 @@ const cleanupExpiredMessages = async () => {
        WHERE order_id IN (
          SELECT id FROM orders
          WHERE delivery_time IS NOT NULL
-           AND delivery_time < NOW() - INTERVAL '1 day'
+           AND (delivery_time AT TIME ZONE 'America/Los_Angeles') < NOW() - INTERVAL '1 day'
        )`
     );
     if (result.rowCount > 0) {
