@@ -8,6 +8,8 @@ const pool = require('../db');
 const { createOrderLimiter, generalLimiter, createRateLimiter } = require('../middleware/rateLimit');
 const { partyAccess, hostOnly } = require('../middleware/partyAccess');
 const partyService = require('../services/partyService');
+const issueService = require('../services/issueService');
+const { pushToRestaurant, pushToCustomer } = require('../services/pushService');
 const { cleanMessage } = require('../utils/chatFilter');
 const { sendChatReportAlert } = require('../services/emailService');
 
@@ -506,6 +508,54 @@ router.post('/:orderId/messages/:messageId/report', authenticateToken, validateO
     return res.status(200).json({ status: 'OK', data: { reported: true } });
   } catch (error) {
     return res.status(error.statusCode || 400).json({ status: 'ERROR', message: error.message });
+  }
+});
+
+// ---- Problem with my order (migration 009) ----
+const ISSUE_LABEL = { missing_item: 'Missing item', wrong_item: 'Wrong item', late: 'Late', quality: 'Food quality', other: 'Other' };
+
+// GET /api/orders/:orderId/issues — host or restaurant
+router.get('/:orderId/issues', authenticateToken, validateOrderId, generalLimiter, partyAccess, async (req, res) => {
+  try {
+    if (!['host', 'restaurant', 'admin'].includes(req.partyRole)) return res.status(403).json({ status: 'ERROR', message: 'Not authorized' });
+    const issues = await issueService.listIssues(req.params.orderId);
+    return res.status(200).json({ status: 'OK', data: { issues } });
+  } catch (error) {
+    return res.status(400).json({ status: 'ERROR', message: error.message });
+  }
+});
+
+// POST /api/orders/:orderId/issues  { issueType, message, wantsRefund } — host only
+router.post('/:orderId/issues', authenticateToken, validateOrderId, generalLimiter, partyAccess, hostOnly, async (req, res) => {
+  try {
+    const issue = await issueService.createIssue(req.params.orderId, req.user.userId, req.body || {});
+    pushToRestaurant(req.partyOrder.restaurant_id, {
+      type: 'order_issue',
+      title: 'A customer reported a problem',
+      body: `${ISSUE_LABEL[issue.issue_type] || 'Problem'}${issue.wants_refund ? ' · asks for a refund' : ''}`,
+      orderId: Number(req.params.orderId),
+    }).catch((e) => logger.error({ error: e.message }, 'Issue push failed'));
+    return res.status(201).json({ status: 'OK', data: { issue } });
+  } catch (error) {
+    return res.status(400).json({ status: 'ERROR', message: error.message });
+  }
+});
+
+// PATCH /api/orders/:orderId/issues/:issueId  { reply, resolve } — restaurant
+router.patch('/:orderId/issues/:issueId', authenticateToken, validateOrderId, generalLimiter, partyAccess, async (req, res) => {
+  try {
+    if (!['restaurant', 'admin'].includes(req.partyRole)) return res.status(403).json({ status: 'ERROR', message: 'Not authorized' });
+    if (!/^\d+$/.test(req.params.issueId)) return res.status(400).json({ status: 'ERROR', message: 'Invalid issue ID' });
+    const issue = await issueService.replyToIssue(req.params.orderId, req.params.issueId, req.body?.reply, req.body?.resolve);
+    pushToCustomer(req.partyOrder.user_id, {
+      type: 'order_issue_reply',
+      title: 'The restaurant replied',
+      body: issue.restaurant_reply ? String(issue.restaurant_reply).slice(0, 120) : 'Your problem report was updated.',
+      orderId: Number(req.params.orderId),
+    }).catch((e) => logger.error({ error: e.message }, 'Issue reply push failed'));
+    return res.status(200).json({ status: 'OK', data: { issue } });
+  } catch (error) {
+    return res.status(400).json({ status: 'ERROR', message: error.message });
   }
 });
 

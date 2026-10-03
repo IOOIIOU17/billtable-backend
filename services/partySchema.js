@@ -9,11 +9,14 @@ const { logger } = require('../middleware/logger');
 // running and the party endpoints report the problem on their own.
 async function ensurePartySchema() {
   try {
-    const sql = fs.readFileSync(path.join(__dirname, '..', 'migrations', '008_party_access_and_moderation.sql'), 'utf8');
-    await pool.query(sql);
-    logger.info('Party access / moderation schema ready (migration 008)');
+    // Idempotent migrations applied on every boot (each is IF NOT EXISTS).
+    for (const file of ['008_party_access_and_moderation.sql', '009_order_issues.sql']) {
+      const sql = fs.readFileSync(path.join(__dirname, '..', 'migrations', file), 'utf8');
+      await pool.query(sql);
+      logger.info(`Migration ready: ${file}`);
+    }
   } catch (error) {
-    logger.error({ error: error.message }, 'Migration 008 failed');
+    logger.error({ error: error.message }, 'Startup migration failed');
   }
 }
 
