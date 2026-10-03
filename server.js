@@ -47,6 +47,10 @@ setInterval(() => orderService.cleanupExpiredMessages(), 60 * 60 * 1000);
 
 const { runDeliveryReminders } = require('./services/reminderService');
 setInterval(runDeliveryReminders, 5 * 60 * 1000);
+
+// Birthday Calendar reminders (7 days / 1 day before, from 9am LA)
+const { runBirthdayReminders } = require('./services/birthdayService');
+setInterval(runBirthdayReminders, 60 * 60 * 1000);
 runDeliveryReminders();
 
 const { runUnansweredSweep, RETRY_EVERY_MS } = require('./services/repeatService');
@@ -168,6 +172,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/health', healthRoutes);
 app.use('/api/addresses', addressRoutes);
+app.use('/api/birthdays', require('./routes/birthdayRoutes'));
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/dinein', dineinRoutes);

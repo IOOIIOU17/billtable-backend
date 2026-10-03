@@ -308,10 +308,40 @@ router.post('/reset-password', async (req, res) => {
 router.delete('/account', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.userId;
-    await pool.query('DELETE FROM order_items WHERE order_id IN (SELECT id FROM orders WHERE user_id = $1)', [userId]);
-    await pool.query('DELETE FROM orders WHERE user_id = $1', [userId]);
-    await pool.query('DELETE FROM revoked_tokens WHERE user_id = $1', [userId]);
-    await pool.query('DELETE FROM users WHERE id = $1', [userId]);
+    // Apple 5.1.1(v) / Google: deleting an account must really work. Party
+    // tables (members, chat, activities, issues) point at orders and users
+    // with foreign keys, so the old 4-line delete failed with an FK error
+    // as soon as someone had used Table Home. Remove everything that
+    // belongs to this person, children first, in one transaction.
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const exists = async (table) => (await client.query('SELECT to_regclass($1) AS t', [table])).rows[0].t !== null;
+      const del = async (table, where, params) => {
+        if (await exists(table)) await client.query(`DELETE FROM ${table} WHERE ${where}`, params);
+      };
+      const mine = 'order_id IN (SELECT id FROM orders WHERE user_id = $1)';
+      for (const t of ['order_messages', 'order_members', 'order_activities', 'order_issues', 'message_reports', 'order_items']) {
+        await del(t, mine, [userId]);
+      }
+      await del('orders', 'user_id = $1', [userId]);
+      await del('order_members', 'user_id = $1', [userId]);
+      await del('order_messages', 'user_id = $1', [userId]);
+      await del('order_issues', 'user_id = $1', [userId]);
+      await del('message_reports', 'reporter_user_id = $1', [userId]);
+      await del('user_blocks', 'blocker_user_id = $1 OR blocked_user_id = $1', [userId]);
+      await del('birthdays', 'user_id = $1', [userId]);
+      await del('delivery_addresses', 'user_id = $1', [userId]);
+      await del('push_subscriptions', 'user_id = $1', [userId]);
+      await del('revoked_tokens', 'user_id = $1', [userId]);
+      await client.query('DELETE FROM users WHERE id = $1', [userId]);
+      await client.query('COMMIT');
+    } catch (e) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw e;
+    } finally {
+      client.release();
+    }
     logger.info({ userId }, 'Account deleted');
     return res.status(200).json({ status: 'OK', message: 'Account deleted successfully' });
   } catch (error) {

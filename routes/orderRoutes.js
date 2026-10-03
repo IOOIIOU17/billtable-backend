@@ -37,7 +37,7 @@ function validateOrderId(req, res, next) {
 // POST /api/orders
 router.post('/', authenticateToken, createOrderLimiter, async (req, res) => {
   try {
-    const { restaurantId, items, theme, guestCount, budget, allergies, avoidSpicy, deliveryTime, deliveryAddress, latitude, longitude, budgetWarningShown, budgetWarningAcknowledged, customerComment } = req.body;
+    const { restaurantId, items, theme, guestCount, budget, allergies, avoidSpicy, deliveryTime, deliveryAddress, latitude, longitude, budgetWarningShown, budgetWarningAcknowledged, customerComment, cateringOptions } = req.body;
     if (!restaurantId || !items) {
       return res.status(400).json({ status: 'ERROR', message: 'Restaurant ID and items are required' });
     }
@@ -62,6 +62,12 @@ router.post('/', authenticateToken, createOrderLimiter, async (req, res) => {
       budgetWarningAcknowledged: budgetWarningAcknowledged === true,
       customerComment: typeof customerComment === 'string' ? (customerComment.trim().slice(0, 500) || null) : null,
     });
+    // Catering extras (plates & cutlery, set-up). Only known yes/no keys are kept.
+    if (cateringOptions && typeof cateringOptions === 'object') {
+      const opts = { utensils: cateringOptions.utensils === true, setup: cateringOptions.setup === true };
+      await pool.query('UPDATE orders SET catering_options = $1 WHERE id = $2', [JSON.stringify(opts), order.id]);
+      order.catering_options = opts;
+    }
 
     // ดึงข้อมูลร้านและลูกค้าเพื่อส่ง email
     const restaurantResult = await pool.query('SELECT name, email FROM restaurants WHERE id = $1', [restaurantId]);
@@ -561,6 +567,29 @@ router.post('/:orderId/messages/:messageId/report', authenticateToken, validateO
     return res.status(200).json({ status: 'OK', data: { reported: true } });
   } catch (error) {
     return res.status(error.statusCode || 400).json({ status: 'ERROR', message: error.message });
+  }
+});
+
+// POST /api/orders/:orderId/on-the-way — restaurant: the food has left the kitchen
+router.post('/:orderId/on-the-way', authenticateToken, validateOrderId, generalLimiter, partyAccess, async (req, res) => {
+  try {
+    if (!['restaurant', 'admin'].includes(req.partyRole)) return res.status(403).json({ status: 'ERROR', message: 'Not authorized' });
+    const r = await pool.query(
+      `UPDATE orders SET on_the_way_at = NOW(), updated_at = NOW()
+        WHERE id = $1 AND status IN ('accepted', 'preparing') RETURNING id, user_id, order_number, delivery_time, on_the_way_at`,
+      [req.params.orderId]
+    );
+    if (r.rows.length === 0) return res.status(400).json({ status: 'ERROR', message: 'Only an accepted or cooking order can go out.' });
+    const o = r.rows[0];
+    pushToCustomer(o.user_id, {
+      type: 'on_the_way',
+      title: 'Your food is on the way',
+      body: `${o.order_number} has left the kitchen.`,
+      orderId: o.id,
+    }).catch((e) => logger.error({ error: e.message }, 'On-the-way push failed'));
+    return res.status(200).json({ status: 'OK', data: { on_the_way_at: o.on_the_way_at } });
+  } catch (error) {
+    return res.status(400).json({ status: 'ERROR', message: error.message });
   }
 });
 
