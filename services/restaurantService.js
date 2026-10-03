@@ -159,6 +159,8 @@ async function updateRestaurant(restaurantId, patch) {
         cuisineTypes: 'cuisine_types',
         businessHours: 'business_hours',
         averagePrepTimeMinutes: 'average_prep_time_minutes',
+        minNoticeHours: 'min_notice_hours',
+        minOrderAmount: 'min_order_amount',
         isActive: 'is_active',
         logoUrl: 'logo_url',
         coverImageUrl: 'cover_image_url',

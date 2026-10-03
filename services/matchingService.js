@@ -5,6 +5,7 @@
 
 const pool = require('../db');
 const { getRatingSummaries } = require('./ratingService');
+const { whyNot } = require('../utils/availability');
 
 // --- Cache รายชื่อร้านที่ active (STEP 1) — TTL 30 วินาที ---
 // เหตุผล: ทุก request ของ matching ต้อง query รายการนี้เหมือนกันหมด
@@ -102,6 +103,7 @@ async function findMatches(requirements) {
     avoid_spicy = false,
     budget,
     guest_count = 1,
+    delivery_time = null,
   } = requirements;
 
   // --- STEP 1: ดึงร้านที่ active ทั้งหมด (จาก cache ถ้ายังไม่หมดอายุ) ---
@@ -174,6 +176,10 @@ async function findMatches(requirements) {
       safeMenus.reduce((sum, m) => sum + parseFloat(m.price), 0) /
       safeMenus.length;
     const estimatedTotal = avgPrice * guest_count;
+
+    // Busy mode, opening hours, notice period and minimum order: skip a
+    // restaurant that could not actually do this party (utils/availability).
+    if (whyNot(restaurant, { deliveryTime: delivery_time, foodTotal: estimatedTotal })) continue;
 
     // Budget filter removed — AI always finds a match
     // Budget warning is shown to customer in Summary page instead

@@ -170,6 +170,35 @@ router.patch('/:restaurantId', authenticateToken, async (req, res) => {
     }
 });
 
+// POST /api/restaurants/:restaurantId/busy  { minutes } — pause new orders
+// for a while (busy mode). minutes = 0 turns it off.
+router.post('/:restaurantId/busy', authenticateToken, async (req, res) => {
+    try {
+        const restaurantId = parseInt(req.params.restaurantId, 10);
+        const minutes = Number(req.body?.minutes);
+        if (isNaN(restaurantId)) return res.status(400).json({ error: 'Invalid restaurant ID' });
+        if (!Number.isFinite(minutes) || minutes < 0 || minutes > 24 * 60) {
+            return res.status(400).json({ error: 'minutes must be between 0 and 1440' });
+        }
+        const existing = await restaurantService.getRestaurantById(restaurantId);
+        if (!existing) return res.status(404).json({ error: 'Restaurant not found' });
+        if (req.user.role !== 'admin' && existing.owner_user_id !== req.user.userId) {
+            return res.status(403).json({ error: 'You do not have permission to change this restaurant' });
+        }
+        const r = await db.query(
+            `UPDATE restaurants
+                SET busy_until = CASE WHEN $1::int > 0 THEN NOW() + ($1::int * INTERVAL '1 minute') ELSE NULL END,
+                    updated_at = CURRENT_TIMESTAMP
+              WHERE id = $2 RETURNING *`,
+            [Math.round(minutes), restaurantId]
+        );
+        return res.status(200).json({ restaurant: r.rows[0] });
+    } catch (error) {
+        console.error('Error setting busy mode:', error);
+        return res.status(500).json({ error: 'Failed to update busy mode' });
+    }
+});
+
 router.patch('/:restaurantId/active-status', authenticateToken, async (req, res) => {
     try {
         const restaurantId = parseInt(req.params.restaurantId, 10);

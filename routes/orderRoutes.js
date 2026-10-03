@@ -9,6 +9,7 @@ const { createOrderLimiter, generalLimiter, createRateLimiter } = require('../mi
 const { partyAccess, hostOnly } = require('../middleware/partyAccess');
 const partyService = require('../services/partyService');
 const issueService = require('../services/issueService');
+const { whyNot } = require('../utils/availability');
 const { pushToRestaurant, pushToCustomer } = require('../services/pushService');
 const { cleanMessage } = require('../utils/chatFilter');
 const { sendChatReportAlert, sendReceiptToCustomer } = require('../services/emailService');
@@ -39,6 +40,17 @@ router.post('/', authenticateToken, createOrderLimiter, async (req, res) => {
     const { restaurantId, items, theme, guestCount, budget, allergies, avoidSpicy, deliveryTime, deliveryAddress, latitude, longitude, budgetWarningShown, budgetWarningAcknowledged, customerComment } = req.body;
     if (!restaurantId || !items) {
       return res.status(400).json({ status: 'ERROR', message: 'Restaurant ID and items are required' });
+    }
+    // Same capacity rules as matching, checked again here so an order can
+    // never reach a restaurant that is busy, closed then, or given too
+    // little notice. Food total is checked inside createOrder's pricing.
+    const rest = await pool.query('SELECT * FROM restaurants WHERE id = $1 AND is_deleted = false', [restaurantId]);
+    if (rest.rows.length === 0 || !rest.rows[0].is_active) {
+      return res.status(400).json({ status: 'ERROR', message: 'This restaurant is not taking orders right now.' });
+    }
+    const capacityProblem = whyNot(rest.rows[0], { deliveryTime });
+    if (capacityProblem) {
+      return res.status(400).json({ status: 'ERROR', message: capacityProblem });
     }
     // budgetWarning* and customerComment were sent by both customer apps but
     // dropped here, so they were never saved -- the restaurant never saw the

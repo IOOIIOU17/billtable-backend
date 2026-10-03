@@ -40,6 +40,7 @@ router.post('/find', authenticateToken, matchingLimiter, async (req, res) => {
       avoid_spicy,
       budget,
       guest_count,
+      delivery_time,
     } = req.body;
 
     // --- ตรวจสอบ input ที่จำเป็น ---
@@ -66,6 +67,7 @@ router.post('/find', authenticateToken, matchingLimiter, async (req, res) => {
       avoid_spicy: avoid_spicy || false,
       budget: budget || null,
       guest_count: guest_count || 1,
+      delivery_time: delivery_time || null,
     });
 
     // --- ถ้าไม่เจอร้านที่ match เลย ---

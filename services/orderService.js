@@ -41,6 +41,13 @@ const createOrder = async (userId, restaurantId, items, extra = {}) => {
       return { name: menu.name, quantity: qty, unitPrice: menu.price, totalPrice: lineTotal };
     });
 
+    // Restaurant's minimum order (migration 010)
+    const minRow = await pool.query('SELECT min_order_amount FROM restaurants WHERE id = $1', [restaurantId]);
+    const minOrder = Number(minRow.rows[0]?.min_order_amount || 0);
+    if (minOrder > 0 && foodTotal < minOrder) {
+      throw new Error(`This restaurant's minimum order is $${minOrder.toFixed(2)}. Add more guests or dishes.`);
+    }
+
     // Tax & fee breakdown
     const subtotal = parseFloat(foodTotal.toFixed(2));
     const taxAmount = parseFloat((subtotal * TAX_RATE).toFixed(2));
