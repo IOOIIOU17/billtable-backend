@@ -20,6 +20,7 @@ const router = express.Router();
 const restaurantService = require('../services/restaurantService');
 const { authenticateToken, requireRole } = require('../middleware/auth');
 const db = require('../db');
+const { getRestaurantReviews } = require('../services/ratingService');
 
 router.post('/register', authenticateToken, async (req, res) => {
     try {
@@ -72,6 +73,19 @@ router.get('/mine', authenticateToken, async (req, res) => {
     } catch (error) {
         console.error('Error fetching owner restaurants:', error);
         return res.status(500).json({ error: 'Failed to fetch restaurants' });
+    }
+});
+
+// GET /api/restaurants/mine/reviews — the owner's star rating and recent reviews
+router.get('/mine/reviews', authenticateToken, async (req, res) => {
+    try {
+        const restaurants = await restaurantService.getRestaurantsByOwner(req.user.userId);
+        if (!restaurants.length) return res.status(404).json({ error: 'No restaurant for this account' });
+        const data = await getRestaurantReviews(restaurants[0].id);
+        return res.status(200).json(data);
+    } catch (error) {
+        console.error('Error fetching reviews:', error);
+        return res.status(500).json({ error: 'Failed to fetch reviews' });
     }
 });
 

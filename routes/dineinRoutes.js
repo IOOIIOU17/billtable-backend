@@ -8,6 +8,7 @@ const { round2 } = require('../services/dineinService');
 const { calculateDistance } = require('../services/matchingService');
 const { pushToRestaurant, pushToCustomer } = require('../services/pushService');
 const { addOrderMessage } = require('../services/orderService');
+const { getRatingSummaries } = require('../services/ratingService');
 
 // Dine-in party booking. Everything here lives on the existing orders table
 // with order_mode = 'dinein', so the table chat, members and admin views that
@@ -503,7 +504,10 @@ router.post('/find-venue', authenticateToken, async (req, res) => {
       .sort((a, b) => b.matchPercent - a.matchPercent || a.row.distance - b.row.distance)
       .slice(0, 3);
 
+    const ratings = await getRatingSummaries(ranked.map(({ row }) => row.id));
     const venues = ranked.map(({ row: r, usable, themeMatch, matchPercent }) => ({
+      ratingAvg: ratings[r.id]?.avg ?? null,
+      ratingCount: ratings[r.id]?.count ?? 0,
       id: r.id,
       name: r.name,
       address: r.address,

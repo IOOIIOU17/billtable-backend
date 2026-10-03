@@ -253,9 +253,9 @@ router.patch('/:orderId/rating', authenticateToken, validateOrderId, async (req,
       return res.status(403).json({ status: 'ERROR', message: 'Not authorized to rate this order' });
     }
 
-    // ต้อง delivered แล้วเท่านั้น
-    if (existing.status !== 'delivered') {
-      return res.status(400).json({ status: 'ERROR', message: 'You can only rate delivered orders' });
+    // Delivered (catering) or completed (dine-in party) only
+    if (!['delivered', 'completed'].includes(existing.status)) {
+      return res.status(400).json({ status: 'ERROR', message: 'You can rate the restaurant after your party' });
     }
 
     // ห้ามแก้ rating ที่ส่งไปแล้ว
@@ -263,7 +263,8 @@ router.patch('/:orderId/rating', authenticateToken, validateOrderId, async (req,
       return res.status(400).json({ status: 'ERROR', message: 'This order has already been rated' });
     }
 
-    const order = await orderService.submitRating(req.params.orderId, rating, review);
+    const cleanReview = typeof review === 'string' && review.trim() ? cleanMessage(review.trim().slice(0, 500)) : null;
+    const order = await orderService.submitRating(req.params.orderId, rating, cleanReview);
     return res.status(200).json({ status: 'OK', message: 'Rating submitted', data: { order } });
   } catch (error) {
     logger.error({ error: error.message }, 'Submit rating error');

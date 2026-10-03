@@ -4,6 +4,7 @@
 // ============================================================
 
 const pool = require('../db');
+const { getRatingSummaries } = require('./ratingService');
 
 // --- Cache รายชื่อร้านที่ active (STEP 1) — TTL 30 วินาที ---
 // เหตุผล: ทุก request ของ matching ต้อง query รายการนี้เหมือนกันหมด
@@ -150,6 +151,8 @@ async function findMatches(requirements) {
     }
   }
 
+  const ratings = await getRatingSummaries(restaurantIds);
+
   const matches = [];
   for (const restaurant of filtered) {
     let menus = menusByRestaurant[restaurant.id] || [];
@@ -190,6 +193,8 @@ async function findMatches(requirements) {
         distance_miles: Math.round(restaurant.distance * 10) / 10,
         phone: restaurant.phone,
         address: restaurant.address,
+        rating_avg: ratings[restaurant.id]?.avg ?? null,
+        rating_count: ratings[restaurant.id]?.count ?? 0,
       },
       recommended_menus: safeMenus.slice(0, 5).map((m) => ({
         id: m.id,
