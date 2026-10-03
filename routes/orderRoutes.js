@@ -196,6 +196,19 @@ router.get('/:orderId', authenticateToken, validateOrderId, generalLimiter, asyn
       }
     }
 
+    // The restaurant can call the customer on the party day (last-minute
+    // changes): name + the phone from the customer's delivery address.
+    if (order.user_id !== req.user.userId) {
+      const c = await pool.query(
+        `SELECT u.name,
+                (SELECT phone FROM delivery_addresses d WHERE d.user_id = u.id AND COALESCE(d.phone, '') <> ''
+                  ORDER BY d.created_at DESC LIMIT 1) AS phone
+           FROM users u WHERE u.id = $1`,
+        [order.user_id]
+      );
+      order.customer_name = c.rows[0]?.name || null;
+      order.customer_phone = c.rows[0]?.phone || null;
+    }
     return res.status(200).json({ status: 'OK', data: { order } });
   } catch (error) {
     logger.error({ error: error.message }, 'Get order endpoint error');
