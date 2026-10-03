@@ -22,6 +22,14 @@ const { authenticateToken, requireRole } = require('../middleware/auth');
 const db = require('../db');
 const { getRestaurantReviews } = require('../services/ratingService');
 const { getSalesReport, getSalesCsv } = require('../services/reportService');
+const upload = require('../middleware/upload');
+const uploadToCloudinary = require('../middleware/cloudinaryUpload');
+const { VIBE_TAGS, OCCASIONS, PARKING_TYPES, clean, profileMissing } = require('../utils/vibe');
+
+// GET /api/restaurants/profile-options — choices for the vibe profile form
+router.get('/profile-options', authenticateToken, (req, res) => {
+    return res.status(200).json({ vibeTags: VIBE_TAGS, occasions: OCCASIONS, parkingTypes: PARKING_TYPES });
+});
 
 router.post('/register', authenticateToken, async (req, res) => {
     try {
@@ -165,10 +173,30 @@ router.get('/:restaurantId', authenticateToken, async (req, res) => {
         if (!restaurant) {
             return res.status(404).json({ error: 'Restaurant not found' });
         }
-        return res.status(200).json({ restaurant });
+        return res.status(200).json({ restaurant: { ...restaurant, profile_missing: profileMissing(restaurant) } });
     } catch (error) {
         console.error('Error fetching restaurant:', error);
         return res.status(500).json({ error: 'Failed to fetch restaurant' });
+    }
+});
+
+// POST /api/restaurants/:restaurantId/cover  (multipart "image") — storefront photo
+router.post('/:restaurantId/cover', authenticateToken, upload.single('image'), async (req, res) => {
+    try {
+        const restaurantId = parseInt(req.params.restaurantId, 10);
+        if (isNaN(restaurantId)) return res.status(400).json({ error: 'Invalid restaurant ID' });
+        const existing = await restaurantService.getRestaurantById(restaurantId);
+        if (!existing) return res.status(404).json({ error: 'Restaurant not found' });
+        if (req.user.role !== 'admin' && existing.owner_user_id !== req.user.userId) {
+            return res.status(403).json({ error: 'You do not have permission to update this restaurant' });
+        }
+        if (!req.file) return res.status(400).json({ error: 'Add a photo' });
+        const url = await uploadToCloudinary(req.file.buffer);
+        const updated = await restaurantService.updateRestaurant(restaurantId, { coverImageUrl: url });
+        return res.status(200).json({ restaurant: { ...updated, profile_missing: profileMissing(updated) } });
+    } catch (error) {
+        console.error('Error uploading cover photo:', error);
+        return res.status(500).json({ error: 'Could not upload the photo' });
     }
 });
 
@@ -189,8 +217,23 @@ router.patch('/:restaurantId', authenticateToken, async (req, res) => {
             return res.status(403).json({ error: 'You do not have permission to update this restaurant' });
         }
 
-        const updated = await restaurantService.updateRestaurant(restaurantId, req.body);
-        return res.status(200).json({ message: 'Restaurant updated successfully', restaurant: updated });
+        // Vibe profile fields: only the fixed choices, trimmed text.
+        const patch = { ...req.body };
+        if (patch.vibeTags !== undefined) patch.vibeTags = clean(patch.vibeTags, VIBE_TAGS);
+        if (patch.bestFor !== undefined) patch.bestFor = clean(patch.bestFor, OCCASIONS);
+        if (patch.parkingType !== undefined) patch.parkingType = clean([patch.parkingType], PARKING_TYPES)[0] || null;
+        if (patch.vibeText !== undefined) patch.vibeText = String(patch.vibeText || '').trim().slice(0, 600) || null;
+        if (patch.parkingNote !== undefined) patch.parkingNote = String(patch.parkingNote || '').trim().slice(0, 200) || null;
+        if (patch.priceLevel !== undefined) {
+            const n = parseInt(patch.priceLevel, 10);
+            patch.priceLevel = n >= 1 && n <= 4 ? n : null;
+        }
+
+        const updated = await restaurantService.updateRestaurant(restaurantId, patch);
+        return res.status(200).json({
+            message: 'Restaurant updated successfully',
+            restaurant: updated ? { ...updated, profile_missing: profileMissing(updated) } : updated,
+        });
     } catch (error) {
         console.error('Error updating restaurant:', error);
         return res.status(500).json({ error: 'Failed to update restaurant' });

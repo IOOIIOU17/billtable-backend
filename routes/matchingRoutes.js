@@ -13,7 +13,10 @@ const { matchingLimiter } = require('../middleware/rateLimit');
 // POST /api/matching/find
 // รับ requirements ของลูกค้า → คืนร้าน+เมนูที่ match (top 5)
 // ============================================================
-router.post('/find', authenticateToken, matchingLimiter, async (req, res) => {
+// POST /api/matching/find   — Smart Match (top 5, app shows the best one)
+// POST /api/matching/browse — same filters, up to 30, customer picks
+router.post(['/find', '/browse'], authenticateToken, matchingLimiter, async (req, res) => {
+  const browsing = req.path === '/browse';
   const state = global.trafficState;
   if (state) {
     // ถ้า Limiter เปิด และ matching เกิน threshold → block
@@ -41,6 +44,7 @@ router.post('/find', authenticateToken, matchingLimiter, async (req, res) => {
       budget,
       guest_count,
       delivery_time,
+      theme,
     } = req.body;
 
     // --- ตรวจสอบ input ที่จำเป็น ---
@@ -68,6 +72,8 @@ router.post('/find', authenticateToken, matchingLimiter, async (req, res) => {
       budget: budget || null,
       guest_count: guest_count || 1,
       delivery_time: delivery_time || null,
+      theme: typeof theme === 'string' ? theme.slice(0, 80) : null,
+      limit: browsing ? 30 : 5,
     });
 
     // --- ถ้าไม่เจอร้านที่ match เลย ---

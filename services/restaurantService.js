@@ -164,6 +164,13 @@ async function updateRestaurant(restaurantId, patch) {
         isActive: 'is_active',
         logoUrl: 'logo_url',
         coverImageUrl: 'cover_image_url',
+        // Vibe profile (migration 012) — cleaned in the route
+        vibeText: 'vibe_text',
+        vibeTags: 'vibe_tags',
+        bestFor: 'best_for',
+        priceLevel: 'price_level',
+        parkingType: 'parking_type',
+        parkingNote: 'parking_note',
         // isDeleted intentionally NOT in this map anymore — permanent deletion
         // must go through requestRestaurantDeletion()/the grace-period flow
         // below, never a plain field-by-field PATCH. See migration 007.

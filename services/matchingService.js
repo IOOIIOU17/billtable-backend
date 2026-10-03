@@ -6,6 +6,7 @@
 const pool = require('../db');
 const { getRatingSummaries } = require('./ratingService');
 const { whyNot } = require('../utils/availability');
+const { fitFor, profileMissing } = require('../utils/vibe');
 
 // --- Cache รายชื่อร้านที่ active (STEP 1) — TTL 30 วินาที ---
 // เหตุผล: ทุก request ของ matching ต้อง query รายการนี้เหมือนกันหมด
@@ -104,6 +105,8 @@ async function findMatches(requirements) {
     budget,
     guest_count = 1,
     delivery_time = null,
+    theme = null,
+    limit = 5,
   } = requirements;
 
   // --- STEP 1: ดึงร้านที่ active ทั้งหมด (จาก cache ถ้ายังไม่หมดอายุ) ---
@@ -157,39 +160,47 @@ async function findMatches(requirements) {
 
   const matches = [];
   for (const restaurant of filtered) {
-    let menus = menusByRestaurant[restaurant.id] || [];
+    const menus = menusByRestaurant[restaurant.id] || [];
 
-    // กรองเมนูตาม allergy + taste
-    const safeMenus = menus.filter((menu) => {
-      return (
-        isMenuSafeForAllergies(menu, allergies) &&
-        isMenuMatchTaste(menu, avoid_spicy)
-      );
-    });
-
-    // ถ้าไม่มีเมนูที่ปลอดภัยเลย → ข้ามร้านนี้
+    // Allergy + taste: only dishes this party can eat
+    const safeMenus = menus.filter((menu) => (
+      isMenuSafeForAllergies(menu, allergies) && isMenuMatchTaste(menu, avoid_spicy)
+    ));
     if (safeMenus.length === 0) continue;
 
-    // --- STEP 5: กรองตาม budget ---
-    // คำนวณราคาเฉลี่ยต่อคน
     const avgPrice =
-      safeMenus.reduce((sum, m) => sum + parseFloat(m.price), 0) /
-      safeMenus.length;
+      safeMenus.reduce((sum, m) => sum + parseFloat(m.price), 0) / safeMenus.length;
     const estimatedTotal = avgPrice * guest_count;
 
     // Busy mode, opening hours, notice period and minimum order: skip a
     // restaurant that could not actually do this party (utils/availability).
     if (whyNot(restaurant, { deliveryTime: delivery_time, foodTotal: estimatedTotal })) continue;
 
-    // Budget filter removed — AI always finds a match
-    // Budget warning is shown to customer in Summary page instead
-
-    // --- คำนวณคะแนน ---
-    const score = calculateScore(
+    // Fit 0–100 from occasion/vibe, budget, menu safety, distance, rating
+    // (utils/vibe.js). Budget never removes a restaurant; it lowers the fit.
+    const { fit, reasons } = fitFor({
       restaurant,
-      restaurant.distance,
-      safeMenus.length
-    );
+      theme,
+      distance: restaurant.distance,
+      safeCount: safeMenus.length,
+      totalCount: menus.length,
+      estimatedTotal,
+      budget,
+      guestCount: guest_count,
+      rating: ratings[restaurant.id],
+      allergies,
+      avoidSpicy: avoid_spicy,
+    });
+
+    const toMenu = (m) => ({
+      id: m.id,
+      name: m.name,
+      price: parseFloat(m.price),
+      serving_size: m.serving_size || 1,
+      spicy_level: m.spicy_level,
+      image_url: m.image_url,
+      description: m.description || null,
+    });
 
     matches.push({
       restaurant: {
@@ -199,30 +210,37 @@ async function findMatches(requirements) {
         distance_miles: Math.round(restaurant.distance * 10) / 10,
         phone: restaurant.phone,
         address: restaurant.address,
+        city: restaurant.city,
         rating_avg: ratings[restaurant.id]?.avg ?? null,
         rating_count: ratings[restaurant.id]?.count ?? 0,
+        description: restaurant.description || null,
+        cover_image_url: restaurant.cover_image_url || null,
+        vibe_text: restaurant.vibe_text || null,
+        vibe_tags: restaurant.vibe_tags || [],
+        best_for: restaurant.best_for || [],
+        price_level: restaurant.price_level || null,
+        parking_type: restaurant.parking_type || null,
+        parking_note: restaurant.parking_note || null,
+        profile_complete: profileMissing(restaurant).length === 0,
       },
-      recommended_menus: safeMenus.slice(0, 5).map((m) => ({
-        id: m.id,
-        name: m.name,
-        price: parseFloat(m.price),
-        serving_size: m.serving_size || 1,
-        spicy_level: m.spicy_level,
-        image_url: m.image_url,
-      })),
+      recommended_menus: safeMenus.slice(0, 5).map(toMenu),
+      all_safe_menus: safeMenus.slice(0, 12).map(toMenu),
       menu_count: safeMenus.length,
       estimated_total: Math.round(estimatedTotal * 100) / 100,
-      score: score,
+      fit_percent: fit,
+      fit_reasons: reasons,
+      score: fit,
     });
   }
 
-  // --- STEP 6: เรียงตามคะแนน สูง→ต่ำ คืน top 5 ---
-  matches.sort((a, b) => b.score - a.score);
+  // Highest fit first. Smart Match uses the top one; Browse shows the list.
+  matches.sort((a, b) => b.fit_percent - a.fit_percent);
+  const cap = Math.max(1, Math.min(Number(limit) || 5, 30));
 
   return {
     success: true,
     count: matches.length,
-    matches: matches.slice(0, 5),
+    matches: matches.slice(0, cap),
   };
 }
 
