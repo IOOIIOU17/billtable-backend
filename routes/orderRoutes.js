@@ -11,7 +11,7 @@ const partyService = require('../services/partyService');
 const issueService = require('../services/issueService');
 const { pushToRestaurant, pushToCustomer } = require('../services/pushService');
 const { cleanMessage } = require('../utils/chatFilter');
-const { sendChatReportAlert } = require('../services/emailService');
+const { sendChatReportAlert, sendReceiptToCustomer } = require('../services/emailService');
 
 // Passcode guesses are limited so a code can't be brute-forced.
 const joinLimiter = createRateLimiter({
@@ -191,6 +191,31 @@ router.get('/:orderId', authenticateToken, validateOrderId, generalLimiter, asyn
   }
 });
 
+async function sendReceiptForOrder(orderId) {
+  const r = await pool.query(
+    `SELECT o.*, u.email AS customer_email, u.name AS customer_name, r.name AS restaurant_name, r.address AS restaurant_address
+       FROM orders o JOIN users u ON u.id = o.user_id LEFT JOIN restaurants r ON r.id = o.restaurant_id
+      WHERE o.id = $1`,
+    [orderId]
+  );
+  const o = r.rows[0];
+  if (!o || !o.customer_email) return;
+  const items = await pool.query('SELECT item_name, quantity, total_price FROM order_items WHERE order_id = $1 ORDER BY id', [orderId]);
+  await sendReceiptToCustomer({
+    customerEmail: o.customer_email,
+    customerName: o.customer_name,
+    orderNumber: o.order_number,
+    restaurantName: o.restaurant_name,
+    restaurantAddress: o.restaurant_address,
+    deliveryTime: o.delivery_time,
+    items: items.rows,
+    subtotal: o.subtotal,
+    taxAmount: o.tax_amount,
+    taxRate: o.tax_rate,
+    total: o.total_amount,
+  });
+}
+
 // PATCH /api/orders/:orderId/status
 router.patch('/:orderId/status', authenticateToken, validateOrderId, async (req, res) => {
   try {
@@ -231,6 +256,9 @@ router.patch('/:orderId/status', authenticateToken, validateOrderId, async (req,
     }
 
     const order = await orderService.updateOrderStatus(req.params.orderId, status);
+    if (status === 'delivered') {
+      sendReceiptForOrder(req.params.orderId).catch((e) => logger.error({ error: e.message }, 'Receipt email failed'));
+    }
     return res.status(200).json({ status: 'OK', message: 'Order status updated', data: order });
   } catch (error) {
     logger.error({ error: error.message }, 'Update order status error');

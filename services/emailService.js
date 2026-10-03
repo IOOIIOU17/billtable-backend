@@ -134,4 +134,30 @@ async function sendChatReportAlert({ orderId, messageId, senderName, message, re
   });
 }
 
-module.exports = { sendOrderNotificationToRestaurant, sendOrderConfirmationToCustomer, sendPasswordResetEmail, sendTrafficAlert, sendChatReportAlert };
+// Itemized receipt, sent when the restaurant marks the order delivered.
+// Corporate and catering customers need one to expense the party.
+async function sendReceiptToCustomer({ customerEmail, customerName, orderNumber, restaurantName, restaurantAddress, deliveryTime, items, subtotal, taxAmount, taxRate, total }) {
+  const esc = (v) => String(v ?? '').replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
+  const money = (n) => `$${Number(n || 0).toFixed(2)}`;
+  const rows = (items || []).map((i) => `<tr><td style="padding:4px 0">${esc(i.quantity)} × ${esc(i.item_name)}</td><td style="padding:4px 0;text-align:right">${money(i.total_price)}</td></tr>`).join('');
+  await transporter.sendMail({
+    from: `"BillTable" <${process.env.GMAIL_USER}>`,
+    to: customerEmail,
+    subject: `Your BillTable receipt — ${orderNumber}`,
+    html: `<div style="font-family:Helvetica,Arial,sans-serif;max-width:520px;margin:0 auto;color:#1A1A1A">
+      <h2 style="margin:0 0 4px">BillTable</h2>
+      <p style="margin:0 0 16px;color:#4A4A4A">Receipt for ${esc(orderNumber)}</p>
+      <p>Hi ${esc(customerName || 'there')}, thanks for your party. Here is your receipt.</p>
+      <p style="margin:0">${esc(restaurantName)}<br/>${esc(restaurantAddress || '')}</p>
+      <p style="margin:4px 0 16px;color:#4A4A4A">${esc(deliveryTime || '')}</p>
+      <table style="width:100%;border-collapse:collapse;border-top:2px solid #1A1A1A">${rows}
+        <tr><td style="padding:8px 0 2px;border-top:1px solid #E8E8E8">Subtotal</td><td style="text-align:right;border-top:1px solid #E8E8E8">${money(subtotal)}</td></tr>
+        <tr><td style="padding:2px 0">Tax (${(Number(taxRate || 0) * 100).toFixed(2)}%)</td><td style="text-align:right">${money(taxAmount)}</td></tr>
+        <tr><td style="padding:8px 0;font-weight:bold;border-top:2px solid #1A1A1A">Total</td><td style="text-align:right;font-weight:bold;border-top:2px solid #1A1A1A">${money(total)}</td></tr>
+      </table>
+      <p style="margin-top:24px;font-size:12px;color:#4A4A4A">BillBeBe Inc. · 45 S Arroyo Pkwy #1119, Pasadena, CA 91105 · billtable@billtable.co</p>
+    </div>`,
+  });
+}
+
+module.exports = { sendOrderNotificationToRestaurant, sendOrderConfirmationToCustomer, sendPasswordResetEmail, sendTrafficAlert, sendChatReportAlert, sendReceiptToCustomer };
