@@ -216,7 +216,28 @@ const getOrderMembers = async (orderId) => {
 // role is always stored as 'guest' — who's "host" is decided by the
 // frontend from join order (first row = host), not by what a joiner
 // claims to be, since anyone can call this endpoint.
-const addOrderMember = async (orderId, name) => {
+// Since migration 008 a member row belongs to a user account (user_id),
+// so one person = one seat, and their name can be updated in place.
+// Rows without user_id are from before access control and are kept as-is.
+const addOrderMember = async (orderId, name, userId = null) => {
+  if (userId) {
+    const mine = await pool.query(
+      'SELECT * FROM order_members WHERE order_id = $1 AND user_id = $2',
+      [orderId, userId]
+    );
+    if (mine.rows.length > 0) {
+      const updated = await pool.query(
+        'UPDATE order_members SET name = $1 WHERE id = $2 RETURNING *',
+        [name, mine.rows[0].id]
+      );
+      return updated.rows[0];
+    }
+    const result = await pool.query(
+      'INSERT INTO order_members (order_id, name, role, user_id) VALUES ($1, $2, $3, $4) RETURNING *',
+      [orderId, name, 'guest', userId]
+    );
+    return result.rows[0];
+  }
   const existing = await pool.query(
     'SELECT * FROM order_members WHERE order_id = $1 AND LOWER(name) = LOWER($2)',
     [orderId, name]
@@ -297,11 +318,19 @@ const addOrderActivity = async (orderId, title, time, createdBy) => {
 // Polled by the client every few seconds while the Chat panel is open
 // (no WebSocket infra needed). `sinceId` lets the client ask for only
 // new messages after the last one it already has.
-const getOrderMessages = async (orderId, sinceId) => {
+// Moderation (migration 008): messages hidden by a report are dropped for
+// everyone, and messages from people the viewer blocked are dropped for
+// that viewer only.
+const VISIBLE_TO = `AND COALESCE(hidden, FALSE) = FALSE
+       AND (user_id IS NULL OR user_id NOT IN (
+         SELECT blocked_user_id FROM user_blocks WHERE blocker_user_id = $VIEWER
+       ))`;
+
+const getOrderMessages = async (orderId, sinceId, viewerId = 0) => {
   if (sinceId) {
     const result = await pool.query(
-      'SELECT * FROM order_messages WHERE order_id = $1 AND id > $2 ORDER BY created_at ASC',
-      [orderId, sinceId]
+      `SELECT * FROM order_messages WHERE order_id = $1 AND id > $2 ${VISIBLE_TO.replace('$VIEWER', '$3')} ORDER BY created_at ASC`,
+      [orderId, sinceId, viewerId || 0]
     );
     return result.rows;
   }
@@ -309,17 +338,18 @@ const getOrderMessages = async (orderId, sinceId) => {
   // event doesn't load an ever-growing message list.
   const result = await pool.query(
     `SELECT * FROM (
-       SELECT * FROM order_messages WHERE order_id = $1 ORDER BY created_at DESC LIMIT 200
+       SELECT * FROM order_messages WHERE order_id = $1 ${VISIBLE_TO.replace('$VIEWER', '$2')}
+       ORDER BY created_at DESC LIMIT 200
      ) recent ORDER BY created_at ASC`,
-    [orderId]
+    [orderId, viewerId || 0]
   );
   return result.rows;
 };
 
-const addOrderMessage = async (orderId, senderName, message) => {
+const addOrderMessage = async (orderId, senderName, message, userId = null) => {
   const result = await pool.query(
-    'INSERT INTO order_messages (order_id, sender_name, message) VALUES ($1, $2, $3) RETURNING *',
-    [orderId, senderName, message]
+    'INSERT INTO order_messages (order_id, sender_name, message, user_id) VALUES ($1, $2, $3, $4) RETURNING *',
+    [orderId, senderName, message, userId]
   );
   return result.rows[0];
 };

@@ -118,4 +118,20 @@ BillTable Auto Alert System
   });
 }
 
-module.exports = { sendOrderNotificationToRestaurant, sendOrderConfirmationToCustomer, sendPasswordResetEmail, sendTrafficAlert };
+// A party-chat message was reported. Goes to the BillTable inbox so it can
+// be reviewed within 24h (Apple Guideline 1.2). The message is already
+// hidden by the time this is sent.
+async function sendChatReportAlert({ orderId, messageId, senderName, message, reason, reporterId }) {
+  const esc = (v) => String(v ?? '').replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
+  await transporter.sendMail({
+    from: `"BillTable System" <${process.env.GMAIL_USER}>`,
+    to: process.env.GMAIL_USER,
+    subject: `Chat report — order ${orderId}, message ${messageId}`,
+    html: `<p><b>Reported message</b> (now hidden)</p>
+      <p>Order: ${esc(orderId)}<br/>Message ID: ${esc(messageId)}<br/>From: ${esc(senderName)}<br/>Reported by user: ${esc(reporterId)}</p>
+      <blockquote>${esc(message)}</blockquote>
+      <p>Reason: ${esc(reason || '(none given)')}</p>`,
+  });
+}
+
+module.exports = { sendOrderNotificationToRestaurant, sendOrderConfirmationToCustomer, sendPasswordResetEmail, sendTrafficAlert, sendChatReportAlert };

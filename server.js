@@ -240,6 +240,9 @@ app.use((err, req, res, next) => {
 // ============================================================
 // Start Server
 // ============================================================
+// Party access + chat moderation tables (idempotent, see migration 008)
+require('./services/partySchema').ensurePartySchema();
+
 app.listen(config.PORT, () => {
   logger.info(`Server running on http://localhost:${config.PORT}`);
   logger.info(`Environment: ${config.NODE_ENV}`);

@@ -5,7 +5,18 @@ const { generateClosingMessage } = require('../services/closingMessageService');
 const { authenticateToken, requireRole } = require('../middleware/auth');
 const { logger } = require('../middleware/logger');
 const pool = require('../db');
-const { createOrderLimiter, generalLimiter } = require('../middleware/rateLimit');
+const { createOrderLimiter, generalLimiter, createRateLimiter } = require('../middleware/rateLimit');
+const { partyAccess, hostOnly } = require('../middleware/partyAccess');
+const partyService = require('../services/partyService');
+const { cleanMessage } = require('../utils/chatFilter');
+const { sendChatReportAlert } = require('../services/emailService');
+
+// Passcode guesses are limited so a code can't be brute-forced.
+const joinLimiter = createRateLimiter({
+  maxRequests: 10,
+  windowMs: 60 * 1000,
+  message: 'Too many tries. Wait a minute and try the passcode again.',
+});
 const { sendOrderNotificationToRestaurant, sendOrderConfirmationToCustomer } = require('../services/emailService');
 const { logSecurityEvent } = require('../middleware/securityLogger');
 const { notifyRestaurantNewOrder } = require('../services/pushService');
@@ -317,7 +328,7 @@ router.post('/:orderId/refund', authenticateToken, validateOrderId, async (req, 
 // who knows the orderId (host or a QR-invited guest) can load the table.
 // Does NOT expose the full /:orderId payload's owner-only fields; just
 // enough to render the table (restaurant, theme, guests, items).
-router.get('/:orderId/table', authenticateToken, validateOrderId, generalLimiter, async (req, res) => {
+router.get('/:orderId/table', authenticateToken, validateOrderId, generalLimiter, partyAccess, async (req, res) => {
   try {
     const order = await orderService.getTableView(req.params.orderId);
     return res.status(200).json({ status: 'OK', data: { order } });
@@ -328,7 +339,7 @@ router.get('/:orderId/table', authenticateToken, validateOrderId, generalLimiter
 });
 
 // GET /api/orders/:orderId/members
-router.get('/:orderId/members', authenticateToken, validateOrderId, generalLimiter, async (req, res) => {
+router.get('/:orderId/members', authenticateToken, validateOrderId, generalLimiter, partyAccess, async (req, res) => {
   try {
     const members = await orderService.getOrderMembers(req.params.orderId);
     return res.status(200).json({ status: 'OK', data: { members } });
@@ -339,13 +350,13 @@ router.get('/:orderId/members', authenticateToken, validateOrderId, generalLimit
 });
 
 // POST /api/orders/:orderId/members  { name }
-router.post('/:orderId/members', authenticateToken, validateOrderId, generalLimiter, async (req, res) => {
+router.post('/:orderId/members', authenticateToken, validateOrderId, generalLimiter, partyAccess, async (req, res) => {
   try {
     const { name } = req.body;
     if (!name || !name.trim()) {
       return res.status(400).json({ status: 'ERROR', message: 'Name is required' });
     }
-    const member = await orderService.addOrderMember(req.params.orderId, name.trim().slice(0, 100));
+    const member = await orderService.addOrderMember(req.params.orderId, name.trim().slice(0, 100), req.user.userId);
     return res.status(201).json({ status: 'OK', data: { member } });
   } catch (error) {
     logger.error({ error: error.message }, 'Add order member error');
@@ -354,7 +365,7 @@ router.post('/:orderId/members', authenticateToken, validateOrderId, generalLimi
 });
 
 // POST /api/orders/:orderId/items  { menuItemId, quantity, addedBy } — open ordering
-router.post('/:orderId/items', authenticateToken, validateOrderId, generalLimiter, async (req, res) => {
+router.post('/:orderId/items', authenticateToken, validateOrderId, generalLimiter, partyAccess, async (req, res) => {
   try {
     const { menuItemId, quantity, addedBy } = req.body;
     if (!menuItemId || !addedBy || !addedBy.trim()) {
@@ -369,7 +380,7 @@ router.post('/:orderId/items', authenticateToken, validateOrderId, generalLimite
 });
 
 // DELETE /api/orders/:orderId/items/:itemId  { addedBy } — decrement by 1 / remove
-router.delete('/:orderId/items/:itemId', authenticateToken, validateOrderId, generalLimiter, async (req, res) => {
+router.delete('/:orderId/items/:itemId', authenticateToken, validateOrderId, generalLimiter, partyAccess, async (req, res) => {
   try {
     const { addedBy } = req.body;
     const result = await orderService.removePartyItem(req.params.orderId, req.params.itemId, addedBy);
@@ -381,7 +392,7 @@ router.delete('/:orderId/items/:itemId', authenticateToken, validateOrderId, gen
 });
 
 // GET /api/orders/:orderId/activities
-router.get('/:orderId/activities', authenticateToken, validateOrderId, generalLimiter, async (req, res) => {
+router.get('/:orderId/activities', authenticateToken, validateOrderId, generalLimiter, partyAccess, async (req, res) => {
   try {
     const activities = await orderService.getOrderActivities(req.params.orderId);
     return res.status(200).json({ status: 'OK', data: { activities } });
@@ -392,7 +403,7 @@ router.get('/:orderId/activities', authenticateToken, validateOrderId, generalLi
 });
 
 // POST /api/orders/:orderId/activities  { title, time, createdBy }
-router.post('/:orderId/activities', authenticateToken, validateOrderId, generalLimiter, async (req, res) => {
+router.post('/:orderId/activities', authenticateToken, validateOrderId, generalLimiter, partyAccess, async (req, res) => {
   try {
     const { title, time, createdBy } = req.body;
     if (!title || !title.trim()) {
@@ -408,10 +419,10 @@ router.post('/:orderId/activities', authenticateToken, validateOrderId, generalL
 
 // GET /api/orders/:orderId/messages?sinceId=123 — chat history (or just
 // new messages since sinceId, for polling).
-router.get('/:orderId/messages', authenticateToken, validateOrderId, generalLimiter, async (req, res) => {
+router.get('/:orderId/messages', authenticateToken, validateOrderId, generalLimiter, partyAccess, async (req, res) => {
   try {
     const sinceId = req.query.sinceId && /^\d+$/.test(req.query.sinceId) ? req.query.sinceId : null;
-    const messages = await orderService.getOrderMessages(req.params.orderId, sinceId);
+    const messages = await orderService.getOrderMessages(req.params.orderId, sinceId, req.user.userId);
     return res.status(200).json({ status: 'OK', data: { messages } });
   } catch (error) {
     logger.error({ error: error.message }, 'Get order messages error');
@@ -420,7 +431,7 @@ router.get('/:orderId/messages', authenticateToken, validateOrderId, generalLimi
 });
 
 // POST /api/orders/:orderId/messages  { senderName, message }
-router.post('/:orderId/messages', authenticateToken, validateOrderId, generalLimiter, async (req, res) => {
+router.post('/:orderId/messages', authenticateToken, validateOrderId, generalLimiter, partyAccess, async (req, res) => {
   try {
     const { senderName, message } = req.body;
     if (!senderName || !senderName.trim()) {
@@ -429,10 +440,80 @@ router.post('/:orderId/messages', authenticateToken, validateOrderId, generalLim
     if (!message || !message.trim()) {
       return res.status(400).json({ status: 'ERROR', message: 'Message is required' });
     }
-    const saved = await orderService.addOrderMessage(req.params.orderId, senderName.trim().slice(0, 100), message.trim().slice(0, 1000));
+    const saved = await orderService.addOrderMessage(
+      req.params.orderId,
+      senderName.trim().slice(0, 100),
+      cleanMessage(message.trim().slice(0, 1000)),
+      req.user.userId
+    );
     return res.status(201).json({ status: 'OK', data: { message: saved } });
   } catch (error) {
     logger.error({ error: error.message }, 'Add order message error');
+    return res.status(400).json({ status: 'ERROR', message: error.message });
+  }
+});
+
+// ============================================================
+// Party access + chat moderation (migration 008)
+// ============================================================
+
+// GET /api/orders/:orderId/invite — host sees the party passcode
+router.get('/:orderId/invite', authenticateToken, validateOrderId, generalLimiter, partyAccess, hostOnly, async (req, res) => {
+  try {
+    const invite = await partyService.getInvite(req.params.orderId);
+    return res.status(200).json({ status: 'OK', data: invite });
+  } catch (error) {
+    logger.error({ error: error.message }, 'Get invite error');
+    return res.status(400).json({ status: 'ERROR', message: error.message });
+  }
+});
+
+// PUT /api/orders/:orderId/invite  { passcode } — host changes it
+router.put('/:orderId/invite', authenticateToken, validateOrderId, generalLimiter, partyAccess, hostOnly, async (req, res) => {
+  try {
+    const invite = await partyService.setPasscode(req.params.orderId, req.body?.passcode);
+    return res.status(200).json({ status: 'OK', data: invite });
+  } catch (error) {
+    return res.status(400).json({ status: 'ERROR', message: error.message });
+  }
+});
+
+// POST /api/orders/:orderId/join  { passcode, name } — guest joins
+router.post('/:orderId/join', authenticateToken, validateOrderId, joinLimiter, async (req, res) => {
+  try {
+    const result = await partyService.joinParty(req.params.orderId, req.user.userId, req.body?.name, req.body?.passcode);
+    return res.status(200).json({ status: 'OK', data: result });
+  } catch (error) {
+    if (error.statusCode === 403) logSecurityEvent('PARTY_PASSCODE_WRONG', req, { targetOrderId: req.params.orderId });
+    return res.status(error.statusCode || 400).json({ status: 'ERROR', message: error.message });
+  }
+});
+
+// POST /api/orders/:orderId/messages/:messageId/report  { reason }
+router.post('/:orderId/messages/:messageId/report', authenticateToken, validateOrderId, generalLimiter, partyAccess, async (req, res) => {
+  try {
+    if (!/^\d+$/.test(req.params.messageId)) return res.status(400).json({ status: 'ERROR', message: 'Invalid message ID' });
+    const msg = await partyService.reportMessage(req.params.orderId, req.params.messageId, req.user.userId, req.body?.reason);
+    sendChatReportAlert({
+      orderId: req.params.orderId,
+      messageId: req.params.messageId,
+      senderName: msg.sender_name,
+      message: msg.message,
+      reason: req.body?.reason,
+      reporterId: req.user.userId,
+    }).catch((e) => logger.error({ error: e.message }, 'Chat report email failed'));
+    return res.status(200).json({ status: 'OK', data: { reported: true } });
+  } catch (error) {
+    return res.status(error.statusCode || 400).json({ status: 'ERROR', message: error.message });
+  }
+});
+
+// POST /api/orders/:orderId/block  { userId } — stop seeing someone's messages
+router.post('/:orderId/block', authenticateToken, validateOrderId, generalLimiter, partyAccess, async (req, res) => {
+  try {
+    const result = await partyService.blockUser(req.user.userId, Number(req.body?.userId));
+    return res.status(200).json({ status: 'OK', data: result });
+  } catch (error) {
     return res.status(400).json({ status: 'ERROR', message: error.message });
   }
 });
