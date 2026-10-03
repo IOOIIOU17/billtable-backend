@@ -21,6 +21,7 @@ const restaurantService = require('../services/restaurantService');
 const { authenticateToken, requireRole } = require('../middleware/auth');
 const db = require('../db');
 const { getRestaurantReviews } = require('../services/ratingService');
+const { getSalesReport, getSalesCsv } = require('../services/reportService');
 
 router.post('/register', authenticateToken, async (req, res) => {
     try {
@@ -73,6 +74,32 @@ router.get('/mine', authenticateToken, async (req, res) => {
     } catch (error) {
         console.error('Error fetching owner restaurants:', error);
         return res.status(500).json({ error: 'Failed to fetch restaurants' });
+    }
+});
+
+// GET /api/restaurants/mine/report — monthly sales totals for the owner
+// GET /api/restaurants/mine/report.csv — every finished/cancelled order as CSV
+router.get('/mine/report', authenticateToken, async (req, res) => {
+    try {
+        const restaurants = await restaurantService.getRestaurantsByOwner(req.user.userId);
+        if (!restaurants.length) return res.status(404).json({ error: 'No restaurant for this account' });
+        return res.status(200).json(await getSalesReport(restaurants[0].id));
+    } catch (error) {
+        console.error('Error building report:', error);
+        return res.status(500).json({ error: 'Failed to build report' });
+    }
+});
+
+router.get('/mine/report.csv', authenticateToken, async (req, res) => {
+    try {
+        const restaurants = await restaurantService.getRestaurantsByOwner(req.user.userId);
+        if (!restaurants.length) return res.status(404).json({ error: 'No restaurant for this account' });
+        const csv = await getSalesCsv(restaurants[0].id);
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        return res.status(200).send(csv);
+    } catch (error) {
+        console.error('Error building CSV:', error);
+        return res.status(500).json({ error: 'Failed to build CSV' });
     }
 });
 
