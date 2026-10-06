@@ -204,7 +204,8 @@ const recalculateOrderTotals = async (orderId) => {
 const getTableView = async (orderId) => {
   const result = await pool.query(
     `SELECT o.*, r.name as restaurant_name, r.address as restaurant_address, r.phone as restaurant_phone,
-            r.latitude as restaurant_latitude, r.longitude as restaurant_longitude
+            r.latitude as restaurant_latitude, r.longitude as restaurant_longitude,
+            r.cover_image_url as restaurant_cover_url
      FROM orders o LEFT JOIN restaurants r ON o.restaurant_id = r.id
      WHERE o.id = $1`,
     [orderId]
