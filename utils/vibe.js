@@ -57,31 +57,53 @@ function profileMissing(r) {
   return missing;
 }
 
-// How well one restaurant fits one party, 0–100, plus plain-English reasons.
-// Weights: occasion/vibe 30, budget 25, menu safety 20, distance 15, rating 10.
-function fitFor({ restaurant, theme, distance, safeCount, totalCount, estimatedTotal, budget, guestCount, rating, allergies, avoidSpicy }) {
+const withArticle = (occasion) => {
+  const w = occasion.toLowerCase();
+  return `${/^[aeiou]/.test(w) ? 'an' : 'a'} ${w}`;
+};
+
+// Dine-in only: how well the room itself (best for, vibe, atmosphere text)
+// suits the occasion. Returns 0–30 plus reasons. Atmosphere means nothing
+// when the food is delivered home, so delivery never calls this.
+function roomFit(restaurant, theme) {
   const reasons = [];
   const occasion = occasionFromTheme(theme);
   const bestFor = restaurant.best_for || [];
   const tags = restaurant.vibe_tags || [];
-
-  // Occasion / vibe (30)
-  let vibe = 8;
+  let points = 8;
   if (occasion && bestFor.includes(occasion)) {
-    vibe = 30;
-    reasons.push(`Made for a ${occasion.toLowerCase()}`);
+    points = 30;
+    reasons.push(`Made for ${withArticle(occasion)}`);
   } else if (occasion) {
     const good = tags.filter((t) => (OCCASION_VIBES[occasion] || []).includes(t));
     if (good.length) {
-      vibe = Math.min(24, 12 + good.length * 6);
-      reasons.push(`${good.join(' & ')} vibe suits a ${occasion.toLowerCase()}`);
+      points = Math.min(24, 12 + good.length * 6);
+      reasons.push(`${good.join(' & ')} vibe suits ${withArticle(occasion)}`);
     }
   } else if (tags.length) {
-    vibe = 15;
+    points = 15;
   }
   const themeWord = String(theme || '').trim().toLowerCase();
   if (themeWord.length > 3 && String(restaurant.vibe_text || '').toLowerCase().includes(themeWord)) {
-    vibe = Math.min(30, vibe + 6);
+    points = Math.min(30, points + 6);
+  }
+  return { points, reasons, occasion };
+}
+
+// How well one restaurant fits one DELIVERY party, 0–100, plus reasons.
+// Weights: occasion 30, budget 25, menu safety 20, distance 15, rating 10.
+// Only "best for" counts here (it is about the kind of party the kitchen
+// caters well); vibe, atmosphere and parking are dine-in matters.
+function fitFor({ restaurant, theme, distance, safeCount, totalCount, estimatedTotal, budget, guestCount, rating, allergies, avoidSpicy }) {
+  const reasons = [];
+  const occasion = occasionFromTheme(theme);
+  const bestFor = restaurant.best_for || [];
+
+  // Occasion (30): neutral 15 when we cannot tell
+  let vibe = 15;
+  if (occasion && bestFor.includes(occasion)) {
+    vibe = 30;
+    reasons.push(`Caters a lot of ${occasion.toLowerCase()} parties`);
   }
 
   // Budget (25)
@@ -114,9 +136,8 @@ function fitFor({ restaurant, theme, distance, safeCount, totalCount, estimatedT
     if (Number(rating.avg) >= 4.5) reasons.push(`Guests love it (★ ${rating.avg})`);
   }
 
-  let fit = vibe + money + menu + dist + stars;
-  if (profileMissing(restaurant).length) fit -= 5;
+  const fit = vibe + money + menu + dist + stars;
   return { fit: Math.max(1, Math.min(99, fit)), reasons: reasons.slice(0, 4), occasion };
 }
 
-module.exports = { VIBE_TAGS, OCCASIONS, PARKING_TYPES, OCCASION_VIBES, occasionFromTheme, clean, profileMissing, fitFor };
+module.exports = { VIBE_TAGS, OCCASIONS, PARKING_TYPES, OCCASION_VIBES, occasionFromTheme, clean, profileMissing, fitFor, roomFit };

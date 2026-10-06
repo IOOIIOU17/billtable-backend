@@ -1,4 +1,5 @@
 const express = require('express');
+const { roomFit } = require('../utils/vibe');
 const router = express.Router();
 const pool = require('../db');
 const { logger } = require('../middleware/logger');
@@ -419,7 +420,7 @@ const themeMatchLevel = (cuisineTypes, wanted) => {
 
 router.post('/find-venue', authenticateToken, async (req, res) => {
   try {
-    const { latitude, longitude, partySize, theme, cuisineType, budgetPerPerson, reservedAt } = req.body;
+    const { latitude, longitude, partySize, theme, cuisineType, budgetPerPerson, reservedAt, occasion } = req.body;
     if (latitude === undefined || longitude === undefined) {
       return fail(res, 400, 'A place to search around is required');
     }
@@ -430,7 +431,8 @@ router.post('/find-venue', authenticateToken, async (req, res) => {
       `SELECT r.id, r.name, r.address, r.city, r.state, r.latitude, r.longitude,
               r.cuisine_types, r.logo_url, r.cover_image_url,
               r.deposit_percent, r.parking_type, r.parking_note,
-              r.max_party_size, r.min_advance_hours
+              r.max_party_size, r.min_advance_hours,
+              r.vibe_text, r.vibe_tags, r.best_for, r.price_level, r.description
          FROM restaurants r
         WHERE r.accepts_dinein = TRUE AND r.is_active = TRUE AND r.is_deleted = false
           AND r.latitude IS NOT NULL AND r.longitude IS NOT NULL
@@ -483,20 +485,25 @@ router.post('/find-venue', authenticateToken, async (req, res) => {
       const usable = fits.length ? fits : mine;
       const cheapest = usable.length ? Number(usable[0].price_per_person) : 0;
       const match = themeMatchLevel(r.cuisine_types, wanted);
+      // The room matters when guests eat there: best for / vibe / atmosphere
+      // (migration 012) moves the score up to ±15 around the old number.
+      const room = roomFit(r, occasion || theme);
+      const base = scoreVenue({
+        themeMatch: match,
+        cheapestPrice: cheapest,
+        budgetPerPerson: budget,
+        distance: r.distance,
+        maxPartySize: r.max_party_size,
+        partySize: size,
+      });
 
       return {
         row: r,
         usable,
         hasFittingPackage: fits.length > 0,
         themeMatch: match,
-        matchPercent: scoreVenue({
-          themeMatch: match,
-          cheapestPrice: cheapest,
-          budgetPerPerson: budget,
-          distance: r.distance,
-          maxPartySize: r.max_party_size,
-          partySize: size,
-        }),
+        roomReasons: room.reasons,
+        matchPercent: Math.max(1, Math.min(99, Math.round(base * 0.85 + room.points * 0.5))),
       };
     })
       // A place with no package for this group size cannot really host it.
@@ -505,7 +512,13 @@ router.post('/find-venue', authenticateToken, async (req, res) => {
       .slice(0, 3);
 
     const ratings = await getRatingSummaries(ranked.map(({ row }) => row.id));
-    const venues = ranked.map(({ row: r, usable, themeMatch, matchPercent }) => ({
+    const venues = ranked.map(({ row: r, usable, themeMatch, matchPercent, roomReasons }) => ({
+      vibeText: r.vibe_text || null,
+      vibeTags: r.vibe_tags || [],
+      bestFor: r.best_for || [],
+      priceLevel: r.price_level || null,
+      description: r.description || null,
+      fitReasons: roomReasons,
       ratingAvg: ratings[r.id]?.avg ?? null,
       ratingCount: ratings[r.id]?.count ?? 0,
       id: r.id,
