@@ -2,9 +2,13 @@ const { exec } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 
-const DB_HOST = 'dpg-d8dh52jbc2fs73ekhl30-a.oregon-postgres.render.com';
-const DB_NAME = 'billtable';
-const DB_USER = 'billtable_user';
+// Connection details come from the environment (same as db.js). The
+// password used to be written here in plain text — it must be rotated.
+// NOTE: Render's disk is wiped on every deploy, so files in ./backups do
+// not survive; real backups need Render's own DB backups or an off-site copy.
+const DB_HOST = process.env.DB_HOST;
+const DB_NAME = process.env.DB_NAME;
+const DB_USER = process.env.DB_USER;
 const BACKUP_DIR = path.join(__dirname, '../backups');
 const RETENTION_DAYS = 365;
 
@@ -17,9 +21,13 @@ function runBackup() {
   const filename = `backup_${date}.sql`;
   const filepath = path.join(BACKUP_DIR, filename);
 
-  const cmd = `PGPASSWORD=bEg9K1v1xtgGIcZeMrocDG2yklSKbOQE pg_dump -h ${DB_HOST} -U ${DB_USER} -d ${DB_NAME} -F p -f "${filepath}"`;
+  if (!DB_HOST || !DB_NAME || !DB_USER || !process.env.DB_PASSWORD) {
+    console.error('[BACKUP] Skipped: DB settings missing from the environment');
+    return;
+  }
+  const cmd = `pg_dump -h ${DB_HOST} -U ${DB_USER} -d ${DB_NAME} -F p -f "${filepath}"`;
 
-  exec(cmd, (error, stdout, stderr) => {
+  exec(cmd, { env: { ...process.env, PGPASSWORD: process.env.DB_PASSWORD } }, (error, stdout, stderr) => {
     if (error) {
       console.error(`[BACKUP] Failed: ${error.message}`);
       return;
