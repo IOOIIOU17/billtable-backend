@@ -134,6 +134,18 @@ async function sendChatReportAlert({ orderId, messageId, senderName, message, re
   });
 }
 
+async function sendPhotoReportAlert({ orderId, photoId, url, uploaderName, reporterId }) {
+  const esc = (v) => String(v ?? '').replace(/[<>&"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
+  await transporter.sendMail({
+    from: `"BillTable System" <${process.env.GMAIL_USER}>`,
+    to: process.env.GMAIL_USER,
+    subject: `Photo report — order ${orderId}, photo ${photoId}`,
+    html: `<p><b>Reported party photo</b> (now hidden)</p>
+      <p>Order: ${esc(orderId)}<br/>Photo ID: ${esc(photoId)}<br/>Added by: ${esc(uploaderName)}<br/>Reported by user: ${esc(reporterId)}</p>
+      <p><a href="${esc(url)}">Open the photo</a></p>`,
+  });
+}
+
 // Itemized receipt, sent when the restaurant marks the order delivered.
 // Corporate and catering customers need one to expense the party.
 async function sendReceiptToCustomer({ customerEmail, customerName, orderNumber, restaurantName, restaurantAddress, deliveryTime, items, subtotal, taxAmount, taxRate, total }) {
@@ -160,4 +172,4 @@ async function sendReceiptToCustomer({ customerEmail, customerName, orderNumber,
   });
 }
 
-module.exports = { sendOrderNotificationToRestaurant, sendOrderConfirmationToCustomer, sendPasswordResetEmail, sendTrafficAlert, sendChatReportAlert, sendReceiptToCustomer };
+module.exports = { sendOrderNotificationToRestaurant, sendOrderConfirmationToCustomer, sendPasswordResetEmail, sendTrafficAlert, sendChatReportAlert, sendReceiptToCustomer, sendPhotoReportAlert };

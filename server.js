@@ -51,6 +51,10 @@ setInterval(runDeliveryReminders, 5 * 60 * 1000);
 // Birthday Calendar reminders (7 days / 1 day before, from 9am LA)
 const { runBirthdayReminders } = require('./services/birthdayService');
 setInterval(runBirthdayReminders, 60 * 60 * 1000);
+
+// Party photos (cover + Memory) are deleted 24h after the party ends.
+const { cleanupExpiredPhotos } = require('./services/photoService');
+setInterval(cleanupExpiredPhotos, 60 * 60 * 1000);
 runDeliveryReminders();
 
 const { runUnansweredSweep, RETRY_EVERY_MS } = require('./services/repeatService');

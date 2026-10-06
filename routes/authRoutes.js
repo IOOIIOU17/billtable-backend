@@ -314,6 +314,7 @@ router.delete('/account', authenticateToken, async (req, res) => {
     // as soon as someone had used Table Home. Remove everything that
     // belongs to this person, children first, in one transaction.
     const client = await pool.connect();
+    const photoIds = [];
     try {
       await client.query('BEGIN');
       const exists = async (table) => (await client.query('SELECT to_regclass($1) AS t', [table])).rows[0].t !== null;
@@ -321,6 +322,12 @@ router.delete('/account', authenticateToken, async (req, res) => {
         if (await exists(table)) await client.query(`DELETE FROM ${table} WHERE ${where}`, params);
       };
       const mine = 'order_id IN (SELECT id FROM orders WHERE user_id = $1)';
+      // Party photos: remember the Cloudinary files, delete them after commit.
+      if (await exists('party_photos')) {
+        const ph = await client.query(`SELECT public_id FROM party_photos WHERE user_id = $1 OR ${mine}`, [userId]);
+        photoIds.push(...ph.rows.map((r) => r.public_id).filter(Boolean));
+        await client.query(`DELETE FROM party_photos WHERE user_id = $1 OR ${mine}`, [userId]);
+      }
       for (const t of ['order_messages', 'order_members', 'order_activities', 'order_issues', 'message_reports', 'order_items']) {
         await del(t, mine, [userId]);
       }
@@ -343,6 +350,9 @@ router.delete('/account', authenticateToken, async (req, res) => {
       client.release();
     }
     logger.info({ userId }, 'Account deleted');
+    for (const id of photoIds) {
+      require('../services/photoService').destroyImage(id).catch(() => {});
+    }
     return res.status(200).json({ status: 'OK', message: 'Account deleted successfully' });
   } catch (error) {
     logger.error({ error: error.message }, 'Delete account error');

@@ -12,7 +12,9 @@ const issueService = require('../services/issueService');
 const { whyNot } = require('../utils/availability');
 const { pushToRestaurant, pushToCustomer } = require('../services/pushService');
 const { cleanMessage } = require('../utils/chatFilter');
-const { sendChatReportAlert, sendReceiptToCustomer } = require('../services/emailService');
+const { sendChatReportAlert, sendReceiptToCustomer, sendPhotoReportAlert } = require('../services/emailService');
+const photoService = require('../services/photoService');
+const upload = require('../middleware/upload');
 
 // Passcode guesses are limited so a code can't be brute-forced.
 const joinLimiter = createRateLimiter({
@@ -564,6 +566,58 @@ router.post('/:orderId/messages/:messageId/report', authenticateToken, validateO
       reason: req.body?.reason,
       reporterId: req.user.userId,
     }).catch((e) => logger.error({ error: e.message }, 'Chat report email failed'));
+    return res.status(200).json({ status: 'OK', data: { reported: true } });
+  } catch (error) {
+    return res.status(error.statusCode || 400).json({ status: 'ERROR', message: error.message });
+  }
+});
+
+// ---- Party photos: host cover photos + shared Memory album (migration 014) ----
+// GET /api/orders/:orderId/photos — host, members (and admin)
+router.get('/:orderId/photos', authenticateToken, validateOrderId, generalLimiter, partyAccess, async (req, res) => {
+  try {
+    if (!['host', 'member', 'admin'].includes(req.partyRole)) return res.status(403).json({ status: 'ERROR', message: 'Not authorized' });
+    return res.status(200).json({ status: 'OK', data: await photoService.listPhotos(req.params.orderId) });
+  } catch (error) {
+    return res.status(400).json({ status: 'ERROR', message: error.message });
+  }
+});
+
+// POST /api/orders/:orderId/photos  multipart: image, kind=cover|memory
+router.post('/:orderId/photos', authenticateToken, validateOrderId, generalLimiter, partyAccess, upload.single('image'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ status: 'ERROR', message: 'Add a photo' });
+    const photo = await photoService.addPhoto({
+      orderId: req.params.orderId,
+      userId: req.user.userId,
+      kind: req.body?.kind === 'cover' ? 'cover' : 'memory',
+      buffer: req.file.buffer,
+      role: req.partyRole,
+    });
+    return res.status(201).json({ status: 'OK', data: { photo } });
+  } catch (error) {
+    return res.status(error.statusCode || 400).json({ status: 'ERROR', message: error.message });
+  }
+});
+
+// DELETE /api/orders/:orderId/photos/:photoId — the person who added it, or the host
+router.delete('/:orderId/photos/:photoId', authenticateToken, validateOrderId, generalLimiter, partyAccess, async (req, res) => {
+  try {
+    if (!/^\d+$/.test(req.params.photoId)) return res.status(400).json({ status: 'ERROR', message: 'Invalid photo ID' });
+    await photoService.removePhoto({ orderId: req.params.orderId, photoId: req.params.photoId, userId: req.user.userId, role: req.partyRole });
+    return res.status(200).json({ status: 'OK' });
+  } catch (error) {
+    return res.status(error.statusCode || 400).json({ status: 'ERROR', message: error.message });
+  }
+});
+
+// POST /api/orders/:orderId/photos/:photoId/report — hides it at once + emails BillTable
+router.post('/:orderId/photos/:photoId/report', authenticateToken, validateOrderId, generalLimiter, partyAccess, async (req, res) => {
+  try {
+    if (!/^\d+$/.test(req.params.photoId)) return res.status(400).json({ status: 'ERROR', message: 'Invalid photo ID' });
+    const p = await photoService.reportPhoto({ orderId: req.params.orderId, photoId: req.params.photoId, userId: req.user.userId });
+    sendPhotoReportAlert({ orderId: req.params.orderId, photoId: p.id, url: p.url, uploaderName: p.uploader_name, reporterId: req.user.userId })
+      .catch((e) => logger.error({ error: e.message }, 'Photo report email failed'));
     return res.status(200).json({ status: 'OK', data: { reported: true } });
   } catch (error) {
     return res.status(error.statusCode || 400).json({ status: 'ERROR', message: error.message });
