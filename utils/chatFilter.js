@@ -1,7 +1,7 @@
 // Party chat word filter (Apple Guideline 1.2 asks apps with user-to-user
 // chat to filter objectionable material). Masks slurs and strong
 // profanity with asterisks; it does not block the message, so normal
-// conversation is never lost. Word list written for BillTable -- extend
+// conversation is never lost. Word list written for TigTagTrue -- extend
 // it when a report shows something it missed.
 const WORDS = [
   'fuck', 'fucking', 'fucker', 'motherfucker', 'shit', 'bullshit', 'bitch',

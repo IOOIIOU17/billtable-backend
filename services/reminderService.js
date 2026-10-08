@@ -26,7 +26,7 @@ async function runWindow({ hours, column, label }) {
   // session's zone (UTC on Render) -- an LA 6:30pm party looked like
   // 6:30pm UTC, 7-8 hours too early, so reminders fired hours early.
   // AT TIME ZONE 'America/Los_Angeles' turns the naive LA wall-clock value
-  // into the real instant first (BillTable is LA-only). Fixed 2026-10-02.
+  // into the real instant first (TigTagTrue is LA-only). Fixed 2026-10-02.
   const result = await pool.query(
     `SELECT ${CARD_FIELDS}
        FROM orders

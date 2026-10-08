@@ -7,7 +7,7 @@ const { Pool, types } = require('pg');
 // getMonth() etc., not UTC). pg's default parser (OID 1114) converts that
 // into a JS Date using the SERVER process's timezone, which silently
 // shifts it whenever the server isn't in the same zone the value was
-// written in — Render runs in UTC, BillTable is LA-only, so every naive
+// written in — Render runs in UTC, TigTagTrue is LA-only, so every naive
 // timestamp read back was off by the UTC/Pacific offset. Returning the raw
 // string instead lets each client's own `new Date(str)` interpret it as
 // its own local time, which is what was actually intended — no client

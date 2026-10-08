@@ -53,7 +53,7 @@ async function runBirthdayReminders() {
       await pushToCustomer(b.user_id, {
         type: 'birthday',
         title: diff === 7 ? `${b.name}'s birthday is in a week` : `${b.name}'s birthday is tomorrow`,
-        body: 'Want to set a table for it? Open BillTable to plan the party.',
+        body: 'Want to set a table for it? Open TigTagTrue to plan the party.',
       }).catch(() => {});
       await pool.query('UPDATE birthdays SET last_reminded_on = $1::date WHERE id = $2', [today, b.id]);
     }

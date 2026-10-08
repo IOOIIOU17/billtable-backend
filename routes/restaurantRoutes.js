@@ -1,6 +1,6 @@
 /**
  * ============================================================
- * BillTable Restaurant Routes
+ * TigTagTrue Restaurant Routes
  * ============================================================
  * Purpose: HTTP endpoints for restaurant operations
  * Handles: Receives requests, validates input, calls service,

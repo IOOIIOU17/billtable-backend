@@ -586,7 +586,7 @@ router.patch('/:orderId/confirm', authenticateToken, requireRole('restaurant'), 
     );
     await logAudit(req.user, 'dinein_confirmed', booking.id, { partySize: booking.party_size });
 
-    addOrderMessage(booking.id, 'BillTable', `${booking.restaurant_name} confirmed your table.`)
+    addOrderMessage(booking.id, 'TigTagTrue', `${booking.restaurant_name} confirmed your table.`)
       .catch((e) => logger.error({ error: e.message }, 'Confirm chat note failed'));
     pushToCustomer(booking.user_id, {
       title: 'Your table is confirmed',
@@ -629,7 +629,7 @@ router.patch('/:orderId/decline', authenticateToken, requireRole('restaurant'), 
     );
     await logAudit(req.user, 'dinein_declined', booking.id, split);
 
-    addOrderMessage(booking.id, 'BillTable', 'The restaurant could not take this table. Your deposit is being refunded in full.')
+    addOrderMessage(booking.id, 'TigTagTrue', 'The restaurant could not take this table. Your deposit is being refunded in full.')
       .catch((e) => logger.error({ error: e.message }, 'Decline chat note failed'));
     pushToCustomer(booking.user_id, {
       title: "That table didn't work out",
@@ -673,7 +673,7 @@ router.post('/:orderId/cancel-table', authenticateToken, async (req, res) => {
     );
     await logAudit(req.user, 'dinein_cancel_table', booking.id, split);
 
-    addOrderMessage(booking.id, 'BillTable', `The booking at ${booking.restaurant_name} is off. This table is still open — pick another place.`)
+    addOrderMessage(booking.id, 'TigTagTrue', `The booking at ${booking.restaurant_name} is off. This table is still open — pick another place.`)
       .catch((e) => logger.error({ error: e.message }, 'Cancel-table chat note failed'));
     pushToRestaurant(booking.restaurant_id, {
       title: 'Table cancelled',
@@ -716,7 +716,7 @@ router.post('/:orderId/cancel-party', authenticateToken, async (req, res) => {
     );
     await logAudit(req.user, 'dinein_cancel_party', booking.id, split);
 
-    addOrderMessage(booking.id, 'BillTable', 'The host called this party off. The table is closed.')
+    addOrderMessage(booking.id, 'TigTagTrue', 'The host called this party off. The table is closed.')
       .catch((e) => logger.error({ error: e.message }, 'Cancel-party chat note failed'));
     pushToRestaurant(booking.restaurant_id, {
       title: 'Party cancelled',
@@ -767,7 +767,7 @@ router.post('/:orderId/reschedule', authenticateToken, async (req, res) => {
     );
     await logAudit(req.user, 'dinein_rescheduled', booking.id, { from: booking.reserved_at, to: reservedAt });
 
-    addOrderMessage(booking.id, 'BillTable', 'The host asked to move this table. Waiting on the restaurant.')
+    addOrderMessage(booking.id, 'TigTagTrue', 'The host asked to move this table. Waiting on the restaurant.')
       .catch((e) => logger.error({ error: e.message }, 'Reschedule chat note failed'));
     pushToRestaurant(booking.restaurant_id, {
       title: 'Guest asked to move a table',

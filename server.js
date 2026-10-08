@@ -3,7 +3,7 @@ const Sentry = require('@sentry/node');
 
 /**
  * ============================================================
- * BillTable Backend Server
+ * TigTagTrue Backend Server
  * ============================================================
  * Express server entry point.
  *
@@ -190,7 +190,7 @@ app.get('/health', async (req, res) => {
     logger.info('Health check passed');
     res.json({
       status: 'OK',
-      message: 'BillTable Backend is running!',
+      message: 'TigTagTrue Backend is running!',
       database: 'Connected',
       timestamp: result.rows[0],
       environment: config.NODE_ENV,

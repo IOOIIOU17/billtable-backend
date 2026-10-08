@@ -12,10 +12,10 @@ function generateSecret() {
 }
 
 // สร้าง URL สำหรับทำ QR code (ใช้ scan ด้วย Google Authenticator)
-function generateQRCodeUrl(secret, accountName = 'BillTable Admin') {
+function generateQRCodeUrl(secret, accountName = 'TigTagTrue Admin') {
   return generateURI({
     strategy: 'totp',
-    issuer: 'BillTable',
+    issuer: 'TigTagTrue',
     label: accountName,
     secret,
   });

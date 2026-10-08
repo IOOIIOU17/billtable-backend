@@ -1,6 +1,6 @@
 /**
  * ============================================================
- * BillTable Auth Middleware
+ * TigTagTrue Auth Middleware
  * ============================================================
  * Purpose: HTTP middleware that verifies JWT tokens on
  *          protected routes.

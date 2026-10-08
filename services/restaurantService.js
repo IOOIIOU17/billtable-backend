@@ -1,6 +1,6 @@
 /**
  * ============================================================
- * BillTable Restaurant Service
+ * TigTagTrue Restaurant Service
  * ============================================================
  * Purpose: Business logic for restaurant management
  * Handles: Registration, retrieval, updates, location queries
@@ -296,7 +296,7 @@ async function setRestaurantActiveStatus(restaurantId, isActive) {
 // ============================================================
 // Restaurant deletion — grace-period flow (checked 25 Sep 2026
 // against UberEats/DoorDash: neither lets a restaurant vanish
-// instantly and permanently with zero checks, so BillTable
+// instantly and permanently with zero checks, so TigTagTrue
 // doesn't either). See migration 007_restaurant_deletion.sql.
 // ============================================================
 

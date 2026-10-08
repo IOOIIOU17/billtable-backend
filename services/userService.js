@@ -1,6 +1,6 @@
 /**
  * ============================================================
- * BillTable User Service
+ * TigTagTrue User Service
  * ============================================================
  * Purpose: Business logic for user account management
  * Handles: Registration, login, profile retrieval, password

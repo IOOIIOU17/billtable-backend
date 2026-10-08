@@ -25,7 +25,7 @@ function guestPhrase(guestCount) {
 
 function eventMessage(theme) {
   const templates = {
-    Birthday: "We hope this birthday is filled with laughter, smiles, and memories that last. Please wish the birthday person a wonderful day from all of us at BillTable.",
+    Birthday: "We hope this birthday is filled with laughter, smiles, and memories that last. Please wish the birthday person a wonderful day from all of us at TigTagTrue.",
     Wedding: "We hope this wedding day is everything you dreamed of — surrounded by love, family, and the people who matter most. Please pass along our warmest congratulations to the happy couple.",
     'Game Day @ Home': "We hope game day at home is loud, fun, and full of great moments. Cheer your team on like only you can.",
     'Game Day @ Office': "We hope game day brings your team closer together. Cheer loud, enjoy the food, and make it a day the office remembers.",

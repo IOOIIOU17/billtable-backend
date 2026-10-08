@@ -1,6 +1,6 @@
 /**
  * ============================================================
- * BillTable Menu Service
+ * TigTagTrue Menu Service
  * ============================================================
  * Purpose: Business logic for menu item management
  * Handles: CRUD operations + AI-driven filtering for matching

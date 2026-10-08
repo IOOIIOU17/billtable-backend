@@ -49,7 +49,7 @@ async function joinParty(orderId, userId, name, passcode) {
 
 // Report: the message is hidden for everyone right away (Apple expects
 // objectionable content to be dealt with quickly) and the report is kept
-// for BillTable to review.
+// for TigTagTrue to review.
 async function reportMessage(orderId, messageId, reporterId, reason) {
   const m = await pool.query('SELECT id, user_id, sender_name, message FROM order_messages WHERE id = $1 AND order_id = $2', [messageId, orderId]);
   if (m.rows.length === 0) throw Object.assign(new Error('Message not found'), { statusCode: 404 });

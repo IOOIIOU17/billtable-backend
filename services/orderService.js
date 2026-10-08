@@ -164,7 +164,7 @@ const submitRating = async (orderId, rating, review) => {
 // Table Home (Phase 3 / Feature 2 & 3) — Members, open ordering
 // with per-item attribution, and Party Activities.
 //
-// Auth model for these: any authenticated BillTable user who knows the
+// Auth model for these: any authenticated TigTagTrue user who knows the
 // numeric orderId can join/add — there is no real "invited member" check
 // yet (that's Phase 8, QR + Passcode invite). Good enough for one table
 // of people who all have the app link; not a hard access-control boundary.

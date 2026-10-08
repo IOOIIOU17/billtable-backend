@@ -25,7 +25,7 @@ async function uploadImage(buffer, orderId) {
 
 // Deleting a file from Cloudinary needs a signed request, so it only works
 // when CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET are set on Render.
-// Without them the photo disappears from BillTable but the file stays on
+// Without them the photo disappears from TigTagTrue but the file stays on
 // Cloudinary — logged so it is noticed.
 async function destroyImage(publicId) {
   if (!publicId) return false;
@@ -109,7 +109,7 @@ async function removePhoto({ orderId, photoId, userId, role }) {
   destroyImage(p.public_id).catch((e) => logger.error({ error: e.message }, 'Cloudinary delete failed'));
 }
 
-// Report: hidden for everyone at once, then BillTable reviews it.
+// Report: hidden for everyone at once, then TigTagTrue reviews it.
 async function reportPhoto({ orderId, photoId, userId }) {
   const r = await pool.query(
     `UPDATE party_photos SET hidden = TRUE, reported_by = $3

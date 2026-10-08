@@ -382,7 +382,7 @@ router.post('/:orderId/refund', authenticateToken, validateOrderId, async (req, 
 // Table Home (Phase 3 / Feature 2 & 3) — Members, open ordering
 // with per-item attribution, and Party Activities.
 //
-// NOTE on auth: any authenticated BillTable user who knows the numeric
+// NOTE on auth: any authenticated TigTagTrue user who knows the numeric
 // orderId can join/add here — there is no real "invited member" check
 // yet. Real access control arrives with Phase 8 (QR + Passcode invite).
 // ============================================================
@@ -611,7 +611,7 @@ router.delete('/:orderId/photos/:photoId', authenticateToken, validateOrderId, g
   }
 });
 
-// POST /api/orders/:orderId/photos/:photoId/report — hides it at once + emails BillTable
+// POST /api/orders/:orderId/photos/:photoId/report — hides it at once + emails TigTagTrue
 router.post('/:orderId/photos/:photoId/report', authenticateToken, validateOrderId, generalLimiter, partyAccess, async (req, res) => {
   try {
     if (!/^\d+$/.test(req.params.photoId)) return res.status(400).json({ status: 'ERROR', message: 'Invalid photo ID' });

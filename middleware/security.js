@@ -36,6 +36,11 @@ const corsMiddleware = cors({
     'https://www.billtable.co',
     'https://restaurant.billtable.co',
     'https://admin.billtable.co',
+    // TigTagTrue domains (registered 7 Oct 2026; DNS not pointed yet)
+    'https://tigtagtrue.com',
+    'https://www.tigtagtrue.com',
+    'https://restaurant.tigtagtrue.com',
+    'https://admin.tigtagtrue.com',
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],

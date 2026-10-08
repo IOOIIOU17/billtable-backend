@@ -3,7 +3,7 @@ const pool = require('../db');
 // Sales report for a restaurant (for its own accounting / taxes).
 // Counts finished orders only: catering 'delivered' and dine-in 'completed'.
 // Money columns are the ones written when the order was priced:
-// subtotal (food), tax_amount, platform_fee (BillTable 10%), restaurant_payout.
+// subtotal (food), tax_amount, platform_fee (TigTagTrue 10%), restaurant_payout.
 // Month buckets use LA time, since that is where the restaurant does business.
 async function getSalesReport(restaurantId) {
   const totals = await pool.query(
