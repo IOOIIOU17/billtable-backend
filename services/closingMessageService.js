@@ -10,6 +10,8 @@ const EVENT_THEMES = new Set([
   'Game Day @ Home',
   'Game Day @ Office',
   'Graduation',
+  'Potluck',
+  'Halloween',
   'Other',
 ]);
 
@@ -30,6 +32,8 @@ function eventMessage(theme) {
     'Game Day @ Home': "We hope game day at home is loud, fun, and full of great moments. Cheer your team on like only you can.",
     'Game Day @ Office': "We hope game day brings your team closer together. Cheer loud, enjoy the food, and make it a day the office remembers.",
     Graduation: "We hope graduation day feels as proud and meaningful as every step that led here. Please pass along our congratulations — this one was earned.",
+    Potluck: "We hope every dish on the table tells a little story about who brought it. Enjoy the mix — that's the best part of a potluck.",
+    Halloween: "We hope this Halloween table is full of great costumes, a few good scares, and plenty of laughs. Have a spooky, happy night.",
     'My Party': "We hope this party turns out exactly the way you imagined — and maybe even better. Enjoy every moment of it.",
     Other: "We hope this occasion becomes a wonderful memory for everyone who shares it with you.",
   };
