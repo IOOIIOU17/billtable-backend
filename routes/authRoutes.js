@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const userService = require('../services/userService');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticateToken, requireRole } = require('../middleware/auth');
 const { logger } = require('../middleware/logger');
 const { loginLimiter, resetLoginAttempts } = require('../middleware/loginLimit');
 const { createRateLimiter } = require('../middleware/rateLimit');
@@ -104,7 +104,9 @@ router.post('/restaurant-login', loginLimiter, async (req, res) => {
 });
 
 // POST /api/auth/restaurant-register
-router.post('/restaurant-register', registerLimiter, async (req, res) => {
+// Admin only (no app calls this). It was public; registerUser ignores the
+// role, so it only ever made plain customer accounts.
+router.post('/restaurant-register', authenticateToken, requireRole('admin'), registerLimiter, async (req, res) => {
   try {
     const { email, password, name } = req.body;
     if (!email || !password || !name) {

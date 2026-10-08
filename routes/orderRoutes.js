@@ -395,6 +395,12 @@ router.post('/:orderId/refund', authenticateToken, validateOrderId, async (req, 
 router.get('/:orderId/table', authenticateToken, validateOrderId, generalLimiter, partyAccess, async (req, res) => {
   try {
     const order = await orderService.getTableView(req.params.orderId);
+    // The passcode and payment ids are the host's; guests and the restaurant
+    // don't need them (the host reads the passcode from /invite).
+    if (order && !['host', 'admin'].includes(req.partyRole)) {
+      delete order.party_passcode;
+      delete order.payment_intent_id;
+    }
     return res.status(200).json({ status: 'OK', data: { order } });
   } catch (error) {
     logger.error({ error: error.message }, 'Get table view error');

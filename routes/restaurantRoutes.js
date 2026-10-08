@@ -31,7 +31,10 @@ router.get('/profile-options', authenticateToken, (req, res) => {
     return res.status(200).json({ vibeTags: VIBE_TAGS, occasions: OCCASIONS, parkingTypes: PARKING_TYPES });
 });
 
-router.post('/register', authenticateToken, async (req, res) => {
+// Admin only: restaurants are set up by us when they sign the partner
+// agreement. Before 8 Oct 2026 any signed-in customer could create a live
+// listing here (and then add menus as its owner).
+router.post('/register', authenticateToken, requireRole('admin'), async (req, res) => {
     try {
         const ownerUserId = req.user.userId;
         const {
