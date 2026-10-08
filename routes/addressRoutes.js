@@ -1,4 +1,5 @@
 const express = require('express');
+const { geocodeAddress } = require('../utils/geocode');
 const { generalLimiter } = require('../middleware/rateLimit');
 const router = express.Router();
 const { authenticateToken } = require('../middleware/auth');
@@ -20,9 +21,23 @@ router.get('/', authenticateToken, async (req, res) => {
 // POST /api/addresses - เพิ่มที่อยู่ใหม่
 router.post('/', authenticateToken, generalLimiter, async (req, res) => {
   try {
-    const { address, building, phone, latitude, longitude } = req.body;
-    if (!address || latitude == null || longitude == null) {
-      return res.status(400).json({ status: 'ERROR', message: 'address, latitude, longitude are required' });
+    const { address, building, phone } = req.body;
+    let { latitude, longitude } = req.body;
+    if (!address || typeof address !== 'string') {
+      return res.status(400).json({ status: 'ERROR', message: 'Please enter a delivery address.' });
+    }
+    // Typed address with no map pin: find its coordinates here (utils/geocode).
+    if (latitude == null || longitude == null) {
+      const hit = await geocodeAddress(address);
+      if (!hit) {
+        return res.status(400).json({ status: 'ERROR', message: "We couldn't find that address. Check the street number and city, or tap \"Use my location\"." });
+      }
+      ({ latitude, longitude } = hit);
+    }
+    latitude = Number(latitude);
+    longitude = Number(longitude);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || Math.abs(latitude) > 90 || Math.abs(longitude) > 180) {
+      return res.status(400).json({ status: 'ERROR', message: 'That location looks wrong. Please try again.' });
     }
     const result = await pool.query(
       `INSERT INTO delivery_addresses (user_id, address, building, phone, latitude, longitude)
