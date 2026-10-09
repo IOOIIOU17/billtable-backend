@@ -13,7 +13,7 @@
 const fetchFn = globalThis.fetch || require('node-fetch');
 
 const TIMEOUT_MS = 6000;
-const USER_AGENT = 'TigTagTrue/1.0 (billtable@billtable.co)';
+const USER_AGENT = 'TigTagTrue/1.0 (support@tigtagtrue.com)';
 
 async function getJson(url, headers = {}) {
   const ctrl = new AbortController();

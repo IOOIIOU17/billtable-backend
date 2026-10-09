@@ -167,7 +167,7 @@ async function sendReceiptToCustomer({ customerEmail, customerName, orderNumber,
         <tr><td style="padding:2px 0">Tax (${(Number(taxRate || 0) * 100).toFixed(2)}%)</td><td style="text-align:right">${money(taxAmount)}</td></tr>
         <tr><td style="padding:8px 0;font-weight:bold;border-top:2px solid #1A1A1A">Total</td><td style="text-align:right;font-weight:bold;border-top:2px solid #1A1A1A">${money(total)}</td></tr>
       </table>
-      <p style="margin-top:24px;font-size:12px;color:#4A4A4A">BillBeBe Inc. · 45 S Arroyo Pkwy #1119, Pasadena, CA 91105 · billtable@billtable.co</p>
+      <p style="margin-top:24px;font-size:12px;color:#4A4A4A">BillBeBe Inc. · 45 S Arroyo Pkwy #1119, Pasadena, CA 91105 · support@tigtagtrue.com</p>
     </div>`,
   });
 }
