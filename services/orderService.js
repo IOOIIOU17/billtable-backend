@@ -1,11 +1,12 @@
 const pool = require('../db');
 const { logger } = require('../middleware/logger');
 const { platesNeeded } = require('../utils/portions');
+const { nextOrderNumber } = require('../utils/orderNumber');
 
 // Create Order
 const createOrder = async (userId, restaurantId, items, extra = {}) => {
   try {
-    const orderNumber = 'BT-' + Date.now().toString().slice(-6) + Math.random().toString(36).slice(2, 6).toUpperCase();
+    const orderNumber = await nextOrderNumber();
     const { theme, guestCount, budget, allergies, avoidSpicy, deliveryTime, deliveryAddress, latitude, longitude, budgetWarningShown, budgetWarningAcknowledged, customerComment } = extra;
 
     // Verify all menuItemIds exist and belong to this restaurant, then get real prices from DB

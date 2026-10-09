@@ -1,4 +1,5 @@
 const express = require('express');
+const { nextOrderNumber } = require('../utils/orderNumber');
 const { roomFit } = require('../utils/vibe');
 const router = express.Router();
 const pool = require('../db');
@@ -114,7 +115,7 @@ router.post('/', authenticateToken, async (req, res) => {
     }
 
     await client.query('BEGIN');
-    const orderNumber = 'BT-' + Date.now().toString().slice(-6) + Math.random().toString(36).slice(2, 6).toUpperCase();
+    const orderNumber = await nextOrderNumber(client);
     const inserted = await client.query(
       `INSERT INTO orders
          (user_id, order_number, restaurant_id, order_mode, status,

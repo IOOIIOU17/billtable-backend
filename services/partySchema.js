@@ -10,7 +10,7 @@ const { logger } = require('../middleware/logger');
 async function ensurePartySchema() {
   try {
     // Idempotent migrations applied on every boot (each is IF NOT EXISTS).
-    for (const file of ['008_party_access_and_moderation.sql', '009_order_issues.sql', '010_restaurant_capacity.sql', '011_extras_onway_birthdays.sql', '012_restaurant_vibe.sql', '013_core_indexes.sql', '014_party_photos.sql']) {
+    for (const file of ['008_party_access_and_moderation.sql', '009_order_issues.sql', '010_restaurant_capacity.sql', '011_extras_onway_birthdays.sql', '012_restaurant_vibe.sql', '013_core_indexes.sql', '014_party_photos.sql', '015_order_numbers.sql']) {
       const sql = fs.readFileSync(path.join(__dirname, '..', 'migrations', file), 'utf8');
       await pool.query(sql);
       logger.info(`Migration ready: ${file}`);

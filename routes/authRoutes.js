@@ -5,7 +5,10 @@ const { authenticateToken, requireRole } = require('../middleware/auth');
 const { logger } = require('../middleware/logger');
 const { loginLimiter, resetLoginAttempts } = require('../middleware/loginLimit');
 const { createRateLimiter } = require('../middleware/rateLimit');
-const registerLimiter = createRateLimiter({ maxRequests: 5, windowMs: 60 * 60 * 1000, message: 'Too many accounts created. Please try again later.' });
+// 20 sign-ups per hour per network (Tony, 9 Oct 2026): a party where guests
+// sign up on the host's Wi-Fi must fit; it only stops scripts. Comes off
+// once sign-up has email verification (Phase 12).
+const registerLimiter = createRateLimiter({ maxRequests: 20, windowMs: 60 * 60 * 1000, message: 'Too many accounts created. Please try again later.' });
 const forgotPasswordLimiter = createRateLimiter({ maxRequests: 3, windowMs: 60 * 60 * 1000, message: 'Too many password reset requests. Please try again later.' });
 const { generateSecret, generateQRCodeUrl, verifyToken } = require('../utils/totp');
 const QRCode = require('qrcode');
